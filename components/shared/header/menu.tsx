@@ -1,0 +1,25 @@
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { EllipsisVertical, ShoppingCart, UserIcon } from "lucide-react";
+
+const Menu = () => {
+  return (
+    <div className="flex justify-end gap-3">
+      <nav className="hidden md:flex w-full max-w-x gap-1">
+        <Button asChild variant="ghost">
+          <Link href="/cart">Visualization</Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/cart">About Us</Link>
+        </Button>
+        <Button asChild>
+          <Link href="/profile">
+            <UserIcon /> Sign In
+          </Link>
+        </Button>
+      </nav>
+    </div>
+  );
+};
+
+export default Menu;
