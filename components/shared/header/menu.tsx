@@ -12,10 +12,11 @@ const Menu = () => {
         <Button asChild variant="ghost">
           <Link href="/cart">About Us</Link>
         </Button>
+        <Button asChild variant="ghost">
+          <Link href="/cart">Our Impact</Link>
+        </Button>
         <Button asChild>
-          <Link href="/profile">
-            <UserIcon /> Sign In
-          </Link>
+          <Link href="/profile">Get Involved</Link>
         </Button>
       </nav>
     </div>

@@ -12,19 +12,33 @@
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground)); /* For card/foreground */
+  --color-card-foreground: hsl(
+    var(--card-foreground)
+  ); /* For card/foreground */
   --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground)); /* For popover/foreground */
+  --color-popover-foreground: hsl(
+    var(--popover-foreground)
+  ); /* For popover/foreground */
   --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground)); /* For primary/foreground */
+  --color-primary-foreground: hsl(
+    var(--primary-foreground)
+  ); /* For primary/foreground */
   --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground)); /* For secondary/foreground */
+  --color-secondary-foreground: hsl(
+    var(--secondary-foreground)
+  ); /* For secondary/foreground */
   --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground)); /* For muted/foreground */
+  --color-muted-foreground: hsl(
+    var(--muted-foreground)
+  ); /* For muted/foreground */
   --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground)); /* For accent/foreground */
+  --color-accent-foreground: hsl(
+    var(--accent-foreground)
+  ); /* For accent/foreground */
   --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground)); /* For destructive/foreground */
+  --color-destructive-foreground: hsl(
+    var(--destructive-foreground)
+  ); /* For destructive/foreground */
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
@@ -249,7 +263,15 @@ html.dark .upload-field .text-white {
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
-
+.bg-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -1;
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;
