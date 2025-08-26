@@ -1,6 +1,6 @@
 import "../assets/styles/globals.css";
 import Image from "next/image";
-import MushroomCard from "@/components/shared/muhsroom/mushroom-card";
+import MushroomCard from "@/components/shared/mushroom/mushroom-card";
 import { Button } from "@/components/ui/button";
 
 const Homepage = () => {
