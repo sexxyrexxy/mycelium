@@ -1,7 +1,7 @@
 import React from 'react';
 import { Menu, Users, Brain, Heart, Shield } from 'lucide-react';
 
-const MycoLab: React.FC = () => {
+const AboutUs: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">      
       {/* Hero Section */}
@@ -104,4 +104,4 @@ const MycoLab: React.FC = () => {
   );
 };
 
-export default MycoLab;
+export default AboutUs;
