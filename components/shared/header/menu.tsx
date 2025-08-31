@@ -10,7 +10,7 @@ const Menu = () => {
           <Link href="/cart">Visualization</Link>
         </Button>
         <Button asChild variant="ghost">
-          <Link href="/cart">About Us</Link>
+          <Link href="/about">About Us</Link>
         </Button>
         <Button asChild variant="ghost">
           <Link href="/cart">Our Impact</Link>
