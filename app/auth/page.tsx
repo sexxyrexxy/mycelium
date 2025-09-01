@@ -2,8 +2,10 @@
 
 import React, { useState } from 'react';
 import { Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 
-const MycoLabLogin: React.FC = () => {
+const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,8 +29,10 @@ const MycoLabLogin: React.FC = () => {
       {/* Back to Home Link */}
       <div className="absolute top-6 left-6 z-10">
         <button className="flex items-center space-x-2 text-amber-700 hover:text-amber-800 font-medium transition-colors">
+          <Link href="/" className="flex-start">
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Home</span>
+          </Link>
         </button>
       </div>
 
@@ -37,14 +41,15 @@ const MycoLabLogin: React.FC = () => {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="flex items-center justify-center space-x-3 mb-4">
-              <div className="w-12 h-12 bg-amber-700 rounded-full flex items-center justify-center shadow-lg">
-                <div className="w-6 h-6 bg-amber-200 rounded-full"></div>
-              </div>
-              <div>
-                <div className="font-bold text-amber-800 text-2xl">Myco</div>
-                <div className="font-bold text-amber-800 text-2xl -mt-1">Lab</div>
-              </div>
+            <div className="relative w-40 h-20 mx-auto mb-4">
+            <Image
+                      src="/images/Logo.png"
+                      alt="image logo"
+                      fill
+                      className="object-cover"
+                      sizes="10vw"
+                      priority
+                    />
             </div>
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome back</h1>
             <p className="text-gray-600">Sign in to continue your fungal journey</p>
@@ -58,15 +63,17 @@ const MycoLabLogin: React.FC = () => {
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                   Email address
                 </label>
-                <input
-                  type="email"
-                  id="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
-                  placeholder="Enter your email"
-                  required
-                />
+                <div className="relative">
+                    <input
+                    type="email"
+                    id="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-colors"
+                    placeholder="Enter your email"
+                    required
+                    />
+                </div>
               </div>
 
               {/* Password Field */}
@@ -149,4 +156,4 @@ const MycoLabLogin: React.FC = () => {
   );
 };
 
-export default MycoLabLogin;
+export default Login;
