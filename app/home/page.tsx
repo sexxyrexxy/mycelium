@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Chart } from "../../components/shared/chart/index";
+import { BigMovers } from "@/components/shared/chart/bigMovers";
 
 const sampleData = [
   { time: "2025-08-01", value: 400 },
@@ -22,7 +23,9 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent>
           <Chart data={sampleData} />
-          <p className="text-sm text-gray-500 mt-2">Portfolio overview</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Mushroom Signals overview
+          </p>
         </CardContent>
       </Card>
 
@@ -31,12 +34,11 @@ export default function Dashboard() {
         {/* Promo Box */}
         <Card className="shadow border border-gray-200">
           <CardHeader>
-            <CardTitle>Earn Rewards</CardTitle>
+            <CardTitle>Check Out The Communities Mushrooms</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <p className="text-gray-700 text-sm">
-              Stake Ethereum to earn monthly rewards while helping secure the
-              blockchain network.
+              Unlock the mycelium network.
             </p>
             <button className="rounded-lg bg-green-600 text-white py-2 px-4 hover:bg-green-700">
               Get Started
@@ -47,34 +49,11 @@ export default function Dashboard() {
         {/* Big Movers Box */}
         <Card className="shadow border border-gray-200">
           <CardHeader>
-            <CardTitle>Movers</CardTitle>
+            <CardTitle>Big Movers</CardTitle>
           </CardHeader>
-          <CardContent>
-            <MoverItem name="mushroom1" change={10.59} />
-            <MoverItem name="mushroom2" change={7.1} />
-            <MoverItem name="muchroom3" change={2.35} />
-            <MoverItem name="mushroom4" change={2.19} />
-          </CardContent>
+          <BigMovers />
         </Card>
       </div>
     </div>
   );
 }
-
-const MoverItem: React.FC<{ name: string; change: number }> = ({
-  name,
-  change,
-}) => (
-  <div className="mb-4">
-    <div className="flex justify-between text-sm font-medium text-gray-700">
-      <span>{name}</span>
-      <span className="text-green-600">+{change}%</span>
-    </div>
-    <div className="w-full bg-gray-200 rounded-full h-2">
-      <div
-        className="bg-green-500 h-2 rounded-full"
-        style={{ width: `${Math.min(change, 100)}%` }}
-      />
-    </div>
-  </div>
-);
