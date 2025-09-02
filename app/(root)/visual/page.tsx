@@ -1,25 +1,30 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import SimpleChart, { Point } from "@/components/ui/SimpleChart";
+import SimpleChart, { Point } from "@/components/portfolio/SimpleChart";
 import type { Time } from "lightweight-charts";
 
 // HH:MM:SS | seconds | ms | ISO → Time
 function toTime(x: string | number): Time {
-  if (typeof x === "number" && Number.isFinite(x)) return Math.floor(x) as unknown as Time;
+  if (typeof x === "number" && Number.isFinite(x))
+    return Math.floor(x) as unknown as Time;
   const s = String(x).trim();
 
   // HH:MM:SS
   const m = s.match(/^(\d+):(\d{2}):(\d{2})(?:\.\d+)?$/);
   if (m) {
-    const h = +m[1], mm = +m[2], ss = +m[3];
+    const h = +m[1],
+      mm = +m[2],
+      ss = +m[3];
     return (h * 3600 + mm * 60 + ss) as unknown as Time;
   }
 
   // numeric seconds or ms
   const n = Number(s);
   if (Number.isFinite(n)) {
-    return (n >= 1e11 ? Math.floor(n / 1000) : Math.floor(n)) as unknown as Time;
+    return (n >= 1e11
+      ? Math.floor(n / 1000)
+      : Math.floor(n)) as unknown as Time;
   }
 
   // ISO date
@@ -58,7 +63,14 @@ export default function VisualizationPage() {
       .then((r) => r.text())
       .then((txt) => {
         const pts = parseTwoColCSV(txt);
-        console.log("[page] loaded rows:", pts.length, "first:", pts[0], "last:", pts[pts.length - 1]);
+        console.log(
+          "[page] loaded rows:",
+          pts.length,
+          "first:",
+          pts[0],
+          "last:",
+          pts[pts.length - 1]
+        );
         setData(pts);
       })
       .catch((e) => console.error("CSV fetch/parse error", e));

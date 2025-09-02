@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Chart } from "../../components/shared/chart/index";
+import { Chart } from "../../../components/shared/chart/index";
 import { BigMovers } from "@/components/shared/chart/bigMovers";
 
 const sampleData = [
