@@ -49,7 +49,8 @@ const items: PortfolioItem[] = [
 
 export default function PortfolioList() {
   return (
-    <Card className="w-full overflow-hidden border border-gray-200 shadow-sm">
+    <div>
+      <h1 className="text-large font-bold p-5">My Mushrooms</h1>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -121,6 +122,6 @@ export default function PortfolioList() {
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }
