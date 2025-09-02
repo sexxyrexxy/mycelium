@@ -91,8 +91,8 @@ export default function Homepage() {
 
   const filteredMushrooms = mushrooms.filter(
     (m) =>
-      m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.species.toLowerCase().includes(search.toLowerCase())
+      m.name.toLowerCase().startsWith(search.toLowerCase()) ||
+      m.species.toLowerCase().startsWith(search.toLowerCase())
   );
 
   return (
