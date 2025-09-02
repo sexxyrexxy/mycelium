@@ -101,26 +101,23 @@ export default function Homepage() {
       <div className="h-[500px] relative">
         <Image
           src="/images/background-mushroom.jpg"
-          alt="Mushroom landing"
+          alt="Mushroom Background"
           fill
           className="object-cover"
           sizes="100vw"
           priority
         />
-        <div className="absolute inset-0 flex flex-col items-start justify-center text-white p-8">
-          <h1 className="font-bold text-5xl drop-shadow-lg">Mycelium</h1>
-          <p className="text-2xl mt-4 drop-shadow-lg">
-            A look into the mushroom mind
-          </p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-8 text-center">
+          <h1 className="font-bold text-5xl drop-shadow-lg">Find A Mushroom</h1>
 
           {/* Search Box */}
-          <div className="mt-6 inline-flex bg-white rounded-full overflow-hidden">
+          <div className="mt-6 inline-flex bg-white rounded-full overflow-hidden opacity-70">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search mushrooms..."
-              className="px-4 py-2 outline-none"
+              className="px-4 py-2 outline-none text-black"
             />
             <button className="px-4 bg-[#4a3620] text-white font-bold hover:bg-[#d0923f]">
               🔍
