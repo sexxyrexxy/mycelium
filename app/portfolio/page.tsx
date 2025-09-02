@@ -6,9 +6,8 @@ import { cn } from "@/lib/utils";
 interface PortfolioItem {
   symbol: string;
   name: string;
-  price: number;
+  signal: number;
   change: number;
-  units: number;
   avgOpen: number;
   pl: number;
   plPercent: number;
@@ -17,33 +16,30 @@ interface PortfolioItem {
 
 const items: PortfolioItem[] = [
   {
-    symbol: "DUOL",
-    name: "Duolingo",
-    price: 297.86,
+    symbol: "Mushroom1",
+    name: "Jack",
+    signal: 297.86,
     change: -24.92,
-    units: 4.68936,
     avgOpen: 319.87287,
     pl: -102.52,
     plPercent: -6.83,
     netValue: 1397.48,
   },
   {
-    symbol: "IBM",
-    name: "International Business Machines",
-    price: 243.49,
+    symbol: "Mushroom2",
+    name: "Lois",
+    signal: 243.49,
     change: -2.24,
-    units: 2.30769,
     avgOpen: 260.0,
     pl: -38.15,
     plPercent: -6.36,
     netValue: 561.85,
   },
   {
-    symbol: "PYPL",
-    name: "PayPal Holdings",
-    price: 70.19,
+    symbol: "Mushroom3",
+    name: "Adam",
+    signal: 70.19,
     change: 0.13,
-    units: 5.70811,
     avgOpen: 69.17,
     pl: 5.71,
     plPercent: 1.45,
@@ -58,13 +54,12 @@ export default function PortfolioList() {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
             <tr>
-              <th className="px-4 py-2">Asset</th>
-              <th className="px-4 py-2">Price</th>
-              <th className="px-4 py-2">Units</th>
+              <th className="px-4 py-2">Mushroom</th>
+              <th className="px-4 py-2">Signal</th>
               <th className="px-4 py-2">Avg. Open</th>
-              <th className="px-4 py-2">P/L</th>
-              <th className="px-4 py-2">P/L(%)</th>
-              <th className="px-4 py-2">Net Value</th>
+              <th className="px-4 py-2">Change</th>
+              <th className="px-4 py-2">Change(%)</th>
+              <th className="px-4 py-2">Average</th>
               <th className="px-4 py-2"></th>
               <th className="px-4 py-2"></th>
             </tr>
@@ -79,7 +74,7 @@ export default function PortfolioList() {
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  {item.price.toFixed(2)}{" "}
+                  {item.signal.toFixed(2)}{" "}
                   <span
                     className={cn(
                       "text-xs ml-1",
@@ -90,7 +85,6 @@ export default function PortfolioList() {
                     {item.change.toFixed(2)}
                   </span>
                 </td>
-                <td className="px-4 py-3">{item.units.toFixed(5)}</td>
                 <td className="px-4 py-3">{item.avgOpen.toFixed(2)}</td>
                 <td
                   className={cn(
@@ -110,16 +104,16 @@ export default function PortfolioList() {
                   {item.plPercent.toFixed(2)}%
                 </td>
                 <td className="px-4 py-3 font-medium">
-                  ${item.netValue.toLocaleString()}
+                  {item.netValue.toLocaleString()}
                 </td>
                 <td className="px-4 py-3">
                   <button className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1 text-xs">
-                    Close
+                    End
                   </button>
                 </td>
                 <td className="px-4 py-3">
                   <button className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1 text-xs">
-                    Trade
+                    View
                   </button>
                 </td>
               </tr>
