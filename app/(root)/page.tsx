@@ -40,6 +40,8 @@
 //   );
 // };
 
+"use client"; // For build error handling
+
 import { useState } from "react";
 import "../assets/styles/globals.css";
 import Image from "next/image";
