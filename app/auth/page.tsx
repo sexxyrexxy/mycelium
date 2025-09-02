@@ -2,7 +2,6 @@
 // firebase from config/firebase.tsx
 // style from app/auth/page.tsx
 
-"use client";
 
 import { Auth } from "@/components/auth/auth";
 
