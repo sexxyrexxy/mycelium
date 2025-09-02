@@ -18,7 +18,7 @@ const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-100 via-yellow-50 to-green-100 relative">
-      {/* Background Pattern */}
+      {/* Background Pattern (can change colour or insert image)*/}
       <div 
         className="absolute inset-0 opacity-20"
         style={{
