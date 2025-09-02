@@ -16,7 +16,7 @@ const Menu = () => {
           <Link href="/cart">Our Impact</Link>
         </Button>
         <Button asChild>
-          <Link href="/profile">Get Involved</Link>
+          <Link href="/auth">Login</Link>
         </Button>
       </nav>
     </div>
