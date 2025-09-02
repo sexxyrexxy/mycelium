@@ -26,9 +26,7 @@ const MushroomCard = () => {
           </div>
           <div className="flex-between gap-4">
             <p>Oyster mushroom grows in rainforests etc.</p>
-            <Button asChild>
-              <Link href="/profile">Grow</Link>
-            </Button>
+            <Button asChild>Grow</Button>
           </div>
         </Link>
       </CardContent>
