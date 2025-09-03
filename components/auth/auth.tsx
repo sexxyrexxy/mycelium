@@ -129,7 +129,7 @@ export const Auth = () => {
                 </div>
               </div>
 
-              {/* Remember Me & Forgot Password */}
+              {/* Remember Me & Forgot Password
               <div className="flex items-center justify-between">
                 <label className="flex items-center">
                   <input
@@ -143,7 +143,7 @@ export const Auth = () => {
                 <a href="#" className="text-sm text-amber-700 hover:text-amber-800 font-medium">
                   Forgot password?
                 </a>
-              </div>
+              </div> */}
 
               {/* Login Button */}
               <button
@@ -151,6 +151,14 @@ export const Auth = () => {
                 className="w-full bg-amber-700 text-white py-3 px-4 rounded-lg hover:bg-amber-800 focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 font-medium transition-colors"
               >
                 Sign in
+              </button>
+
+            {/* Login Button */}
+              <button
+                type="submit"
+                className="w-full bg-amber-700 text-white py-3 px-4 rounded-lg hover:bg-amber-800 focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 font-medium transition-colors"
+              >
+                Sign in with Google??
               </button>
             </form>
 
