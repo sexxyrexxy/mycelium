@@ -5,7 +5,7 @@
 
 import { Auth } from "@/components/auth/auth";
 
-const auth2 = () => {
+const auth = () => {
   return (
     <div>
         <Auth />
@@ -13,4 +13,4 @@ const auth2 = () => {
   );
 };
 
-export default auth2;
+export default auth;
