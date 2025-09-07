@@ -7,14 +7,13 @@ export default function Markets() {
     <div className="p-6">
       <Tabs defaultValue="overview" className="w-full">
         {/* Row of buttons */}
-        <TabsList className="grid grid-cols-4 lg:grid-cols-7 gap-2 mb-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsList className="grid grid-cols-4 lg:grid-cols-6 gap-2 mb-6 w-full">
+          <TabsTrigger value="overview">All</TabsTrigger>
           <TabsTrigger value="Oysters">Oysters</TabsTrigger>
           <TabsTrigger value="stocks">Shiitakes</TabsTrigger>
           <TabsTrigger value="crypto">Buttons</TabsTrigger>
           <TabsTrigger value="indices">Maitakes</TabsTrigger>
           <TabsTrigger value="commodities">Enokis</TabsTrigger>
-          <TabsTrigger value="currencies">Siu</TabsTrigger>
         </TabsList>
 
         {/* Content for each tab */}

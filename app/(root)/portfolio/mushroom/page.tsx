@@ -10,7 +10,7 @@ import {
 import React, { useState } from "react";
 import Overview from "./tabs/overview";
 import Chart from "./tabs/chart";
-import Network from "./tabs/network";
+import MushroomNetwork from "./tabs/network";
 import { Analysis } from "./tabs/analysis";
 
 export default function Page() {
@@ -69,7 +69,7 @@ export default function Page() {
           <Chart />
         </TabsContent>
         <TabsContent value="network">
-          <Network />
+          <MushroomNetwork />
         </TabsContent>
         <TabsContent value="analysis">
           <Analysis />

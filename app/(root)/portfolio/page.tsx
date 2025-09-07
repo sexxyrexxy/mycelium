@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface PortfolioItem {
   symbol: string;
@@ -114,7 +115,7 @@ export default function PortfolioList() {
                 </td>
                 <td className="px-4 py-3">
                   <button className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1 text-xs">
-                    View
+                    <Link href="/portfolio/mushroom">View</Link>
                   </button>
                 </td>
               </tr>
