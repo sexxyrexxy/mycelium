@@ -1,10 +1,11 @@
 import { ChartLineInteractive } from "@/components/portfolio/summaryLineChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MushroomGarden, MushroomSprite } from "@/components/portfolio/PixelMushrooms";
 import React from "react";
 
 export default function Overview() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
+    <><div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
       {/* Left side (65%) */}
       <div>
         <ChartLineInteractive />
@@ -50,5 +51,9 @@ export default function Overview() {
         </Card>
       </div>
     </div>
+    <div className="flex flex-col items-center justify-center p-10">
+        <MushroomSprite species="flyAgaric" size={160} duration={2.2} /><MushroomSprite species="shiitake" size={160} duration={2.2} /><MushroomSprite species="oyster" size={160} duration={2.2} />
+    </div>
+    </>
   );
 }
