@@ -1,4 +1,5 @@
 import { ChartLineInteractive } from "@/components/portfolio/summaryLineChart";
+import {SonificationPanel} from "@/components/portfolio/SonificationPanel"; 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import React from "react";
 
@@ -48,6 +49,10 @@ export default function Overview() {
             </div>
           </CardContent>
         </Card>
+        <main className="space-y-6">
+          <SonificationPanel csvUrl="/GhostFungi.csv" />
+        </main>
+
       </div>
     </div>
   );
