@@ -7,7 +7,7 @@ const Menu = () => {
     <div className="flex justify-end gap-3">
       <nav className="hidden md:flex w-full max-w-x gap-1">
         <Button asChild variant="ghost">
-          <Link href="/visual">Visualization</Link>
+          <Link href="/visual/mushroom-chart">Visualization</Link>
         </Button>
         <Button asChild variant="ghost">
           <Link href="/about">About Us</Link>

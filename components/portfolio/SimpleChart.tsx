@@ -588,7 +588,7 @@ export default function SimpleChart({
         </label>
       </div>
 
-      <div ref={containerRef} style={{ width: "100%", height }} />
+      <div ref={containerRef} style={{ width: "100%", height, paddingTop: 30}} />
     </div>
   );
 }

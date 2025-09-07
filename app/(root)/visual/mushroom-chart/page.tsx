@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import SimpleChart, { Point } from "@/components/portfolio/SimpleChart";
 import type { Time } from "lightweight-charts";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 // HH:MM:SS | seconds | ms | ISO → Time
 function toTime(x: string | number): Time {
@@ -56,6 +58,8 @@ function parseTwoColCSV(text: string): Point[] {
 
 export default function VisualizationPage() {
   const [data, setData] = useState<Point[]>([]);
+  const pathname = usePathname();
+
 
   useEffect(() => {
     // cache-bust during dev in case the browser caches the CSV
@@ -77,9 +81,27 @@ export default function VisualizationPage() {
   }, []);
 
   return (
-    <main style={{ padding: 16 }}>
-      <h1 style={{ marginBottom: 12 }}>Mushroom Signal</h1>
-      <SimpleChart data={data} height={420} />
-    </main>
+  <main style={{ paddingTop: 16, paddingBottom: 16 }}>
+<div className="flex gap-6 mb-6 pl-4">
+  <Link href="/visual/mushroom-chart">
+        <button
+          className={`px-4 py-2 border rounded-lg transition ${
+            pathname === "/visual/mushroom-chart"
+              ? "bg-blue-500 text-white border-blue-500"
+              : "bg-white text-black border-gray-300 hover:bg-gray-100"
+          }`}
+        >
+          Mushroom Chart
+        </button>
+  </Link>
+  <Link href="/visual/new-page">
+    <button className="px-4 py-2 border rounded-lg bg-white hover:bg-gray-100 transition">
+      New Chart Page
+    </button>
+  </Link>
+</div>
+    <h1 style={{ marginBottom: 20 }}>Mushroom Signal</h1>
+    <SimpleChart data={data} height={420} />
+  </main>
   );
 }
