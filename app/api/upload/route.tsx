@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
         },
       }) as [Job]; // cast so TS knows this is a Job
 
-    const jobId = job.id;
+    
 
-    // Wait for completion if you want to block until finished
+    // Wait for completion if you want to block until finished(Not done yet)
+    const jobId = job.id;
     await job.promise();
     const [meta] = await job.getMetadata();
 
