@@ -16,6 +16,8 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import MushroomNetwork from "./network";
+import MushroomSprite from "@/components/portfolio/PixelMushrooms";
 
 export const description = "An interactive line chart";
 
@@ -93,87 +95,97 @@ export function Analysis() {
   }, []);
 
   return (
-    <Card className="py-4 sm:py-0">
-      <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
-        <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-          <CardTitle>Electrical Signals</CardTitle>
-          <CardDescription>Real-time feed (auto zoom out)</CardDescription>
-        </div>
-        <div className="flex">
-          {["desktop", "mobile"].map((key) => {
-            const chart = key as keyof typeof chartConfig;
-            return (
-              <button
-                key={chart}
-                data-active={activeChart === chart}
-                className="data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
-                onClick={() => setActiveChart(chart)}
-              >
-                <span className="text-muted-foreground text-xs">
-                  {chartConfig[chart].label}
-                </span>
-                <span className="text-lg leading-none font-bold sm:text-3xl">
-                  {visibleData
-                    .reduce((acc, curr) => acc + curr[chart], 0)
-                    .toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </CardHeader>
-      <CardContent className="px-2 sm:p-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <LineChart
-            accessibilityLayer
-            data={visibleData}
-            margin={{ left: 12, right: 12 }}
+    <>
+      <Card className="py-4 sm:py-0">
+        <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
+          <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
+            <CardTitle>Electrical Signals</CardTitle>
+            <CardDescription>Real-time feed (auto zoom out)</CardDescription>
+          </div>
+          <div className="flex">
+            {["desktop", "mobile"].map((key) => {
+              const chart = key as keyof typeof chartConfig;
+              return (
+                <button
+                  key={chart}
+                  data-active={activeChart === chart}
+                  className="data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
+                  onClick={() => setActiveChart(chart)}
+                >
+                  <span className="text-muted-foreground text-xs">
+                    {chartConfig[chart].label}
+                  </span>
+                  <span className="text-lg leading-none font-bold sm:text-3xl">
+                    {visibleData
+                      .reduce((acc, curr) => acc + curr[chart], 0)
+                      .toLocaleString()}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </CardHeader>
+        <CardContent className="px-2 sm:p-6">
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[250px] w-full"
           >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="timestamp"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={20}
-              // show seconds
-              tickFormatter={(value) => {
-                const date = new Date(value);
-                return date.toLocaleTimeString("en-US", {
-                  minute: "2-digit",
-                  second: "2-digit",
-                });
-              }}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  className="w-[150px]"
-                  nameKey="views"
-                  labelFormatter={(value) =>
-                    new Date(value).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                    })
-                  }
-                />
-              }
-            />
-            <Line
-              dataKey={activeChart}
-              type="monotone"
-              stroke={`var(--color-${activeChart})`}
-              strokeWidth={2}
-              dot={false}
-              isAnimationActive={false}
-            />
-          </LineChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+            <LineChart
+              accessibilityLayer
+              data={visibleData}
+              margin={{ left: 12, right: 12 }}
+            >
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="timestamp"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={20}
+                // show seconds
+                tickFormatter={(value) => {
+                  const date = new Date(value);
+                  return date.toLocaleTimeString("en-US", {
+                    minute: "2-digit",
+                    second: "2-digit",
+                  });
+                }}
+              />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    className="w-[150px]"
+                    nameKey="views"
+                    labelFormatter={(value) =>
+                      new Date(value).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        second: "2-digit",
+                      })
+                    }
+                  />
+                }
+              />
+              <Line
+                dataKey={activeChart}
+                type="monotone"
+                stroke={`var(--color-${activeChart})`}
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+      <div className="flex">
+        <div className="flex flex-col items-center justify-center p-10">
+          <MushroomSprite species="flyAgaric" size={300} duration={2.2} />
+          {/* <MushroomSprite species="shiitake" size={160} duration={2.2} />
+        <MushroomSprite species="oyster" size={160} duration={2.2} /> */}
+        </div>
+        <MushroomNetwork />
+      </div>
+    </>
   );
 }
