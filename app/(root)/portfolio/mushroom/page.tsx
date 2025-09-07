@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import React from "react";
 import Overview from "./tabs/overview";
+import Chart from "./tabs/chart";
 
 export default function Page() {
   return (
@@ -53,6 +54,9 @@ export default function Page() {
 
         <TabsContent value="overview">
           <Overview />
+        </TabsContent>
+        <TabsContent value="chart">
+          <Chart />
         </TabsContent>
       </Tabs>
     </div>
