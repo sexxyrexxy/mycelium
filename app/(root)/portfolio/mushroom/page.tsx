@@ -1,3 +1,4 @@
+"use client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard,
@@ -6,14 +7,22 @@ import {
   Search,
   Layers,
 } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 import Overview from "./tabs/overview";
 import Chart from "./tabs/chart";
+import Network from "./tabs/network";
 
 export default function Page() {
+  const [activeTab, setActiveTab] = useState("overview");
+
   return (
     <div className="wrapper p-4">
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs
+        defaultValue="overview"
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="w-full"
+      >
         <TabsList className="grid grid-cols-5 gap-2 mb-6 w-full">
           <TabsTrigger
             value="overview"
@@ -57,6 +66,9 @@ export default function Page() {
         </TabsContent>
         <TabsContent value="chart">
           <Chart />
+        </TabsContent>
+        <TabsContent value="network">
+          <Network />
         </TabsContent>
       </Tabs>
     </div>

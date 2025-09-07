@@ -224,7 +224,6 @@ export default function SimpleChart({
     let cleanup = () => {};
 
     (async () => {
-      if (chartRef.current) return;
       const LWC = await import("lightweight-charts");
       const { createChart, ColorType, LineStyle } = LWC;
 
