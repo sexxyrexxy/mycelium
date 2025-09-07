@@ -224,7 +224,6 @@ export default function SimpleChart({
     let cleanup = () => {};
 
     (async () => {
-      if (chartRef.current) return;
       const LWC = await import("lightweight-charts");
       const { createChart, ColorType, LineStyle } = LWC;
 
@@ -232,7 +231,6 @@ export default function SimpleChart({
       if (!el) return;
 
       const rect = el.getBoundingClientRect();
-
       const initWidth = Math.max(320, Math.floor(rect.width) || 320);
 
       const chart = createChart(el, {
