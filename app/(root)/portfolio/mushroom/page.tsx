@@ -11,6 +11,7 @@ import React, { useState } from "react";
 import Overview from "./tabs/overview";
 import Chart from "./tabs/chart";
 import Network from "./tabs/network";
+import { Analysis } from "./tabs/analysis";
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -69,6 +70,9 @@ export default function Page() {
         </TabsContent>
         <TabsContent value="network">
           <Network />
+        </TabsContent>
+        <TabsContent value="analysis">
+          <Analysis />
         </TabsContent>
       </Tabs>
     </div>
