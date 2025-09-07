@@ -164,7 +164,7 @@ function spikeMarkersZ(
 // ---------- component ----------
 export default function SimpleChart({
   data,
-  height = 420,
+  height,
 }: {
   data: Point[];
   height?: number;
@@ -222,7 +222,9 @@ export default function SimpleChart({
   // create chart once
   useEffect(() => {
     let cleanup = () => {};
+
     (async () => {
+      if (chartRef.current) return;
       const LWC = await import("lightweight-charts");
       const { createChart, ColorType, LineStyle } = LWC;
 
@@ -238,6 +240,7 @@ export default function SimpleChart({
         layout: {
           background: { type: ColorType.Solid, color: "#ffffff" },
           textColor: "#111827",
+          attributionLogo: false,
         },
         grid: {
           vertLines: { color: "#e5e7eb", style: LineStyle.Solid },
@@ -371,6 +374,12 @@ export default function SimpleChart({
       };
     })();
     return () => cleanup();
+  }, []);
+
+  useEffect(() => {
+    if (chartRef.current) {
+      chartRef.current.applyOptions({ height });
+    }
   }, [height]);
 
   // base series + visible range on data change
