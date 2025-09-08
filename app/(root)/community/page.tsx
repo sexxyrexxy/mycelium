@@ -1,66 +1,48 @@
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { BigCard } from "@/components/shared/chart/bigCard";
+// app/community/page.tsx (or your Markets page)
+"use client";
 
-export default function Markets() {
+import React from "react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CommunityGrid } from "@/components/community/CommunityGrid";
+import type { MushroomKind } from "@/components/community/types";
+import { sampleProfiles } from "@/public/sampleProfiles";
+
+// Build tabs from your species list + "All"
+const categories: ("All" | MushroomKind)[] = [
+  "All",
+  "Oyster",
+  "Shiitake",
+  "King Stropharia",
+  "Enokitake",
+  "King Oyster",
+  "Lion’s Mane",
+  "Pink Oyster",
+  "Turkey Tail",
+  "Wood Blewit",
+];
+
+export default function Community() {
   return (
     <div className="p-6">
-      <Tabs defaultValue="overview" className="w-full">
-        {/* Row of buttons */}
-        <TabsList className="grid grid-cols-4 lg:grid-cols-6 gap-2 mb-6 w-full">
-          <TabsTrigger value="overview">All</TabsTrigger>
-          <TabsTrigger value="Oysters">Oysters</TabsTrigger>
-          <TabsTrigger value="stocks">Shiitakes</TabsTrigger>
-          <TabsTrigger value="crypto">Buttons</TabsTrigger>
-          <TabsTrigger value="indices">Maitakes</TabsTrigger>
-          <TabsTrigger value="commodities">Enokis</TabsTrigger>
+      <Tabs defaultValue="All" className="w-full">
+        {/* Tabs row */}
+        <TabsList className="grid w-full grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 mb-6">
+          {categories.map((c) => (
+            <TabsTrigger key={c} value={c}>
+              {c}
+            </TabsTrigger>
+          ))}
         </TabsList>
 
         {/* Content for each tab */}
-        <TabsContent value="overview">
-          <BigCard
-            name="LuxFutureInvest"
-            image="/images/landing-page-image.jpg" // place your image in /public
-            returnPct={21.61}
-            copiers={201}
-            featured
-          />
-        </TabsContent>
-
-        <TabsContent value="stocks">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stocks</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Stock movers, charts, news...</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="crypto">
-          <Card>
-            <CardHeader>
-              <CardTitle>Crypto</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Crypto-specific stuff goes here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="indices">
-          <Card>
-            <CardHeader>
-              <CardTitle>Indices</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>Indices content...</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ...repeat for other triggers */}
+        {categories.map((c) => (
+          <TabsContent key={c} value={c} className="mt-0">
+            <CommunityGrid
+              profiles={sampleProfiles}
+              activeCategory={c === "All" ? "All" : (c as MushroomKind)}
+            />
+          </TabsContent>
+        ))}
       </Tabs>
     </div>
   );
