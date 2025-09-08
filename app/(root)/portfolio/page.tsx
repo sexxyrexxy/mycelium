@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { UploadPage } from "@/components/upload/upload";
 import Link from "next/link";
 
 interface PortfolioItem {
@@ -51,7 +52,10 @@ const items: PortfolioItem[] = [
 export default function PortfolioList() {
   return (
     <div>
-      <h1 className="text-large font-bold p-5">My Mushrooms</h1>
+      <div className="flex items-center justify-between p-5">
+        <h1 className="text-large font-bold">My Mushrooms</h1>
+        <UploadPage />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
