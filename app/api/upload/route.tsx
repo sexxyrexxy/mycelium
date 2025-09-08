@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Load file into BigQuery
-    const [job] = await bq
+    const [jobLike] = await bq
       .dataset(DATASET_ID)
       .table(TABLE_ID)
       .load(tmpPath, {
@@ -46,27 +46,47 @@ export async function POST(req: NextRequest) {
             { name: "Signal_mV",     type: "FLOAT" },
           ],
         },
-      }) as [Job]; // cast so TS knows this is a Job
+      }); // cast so TS knows this is a Job
 
-    
+     // 4) Rehydrate a Job handle (jobLike may be a plain object)
+    const jr = (jobLike as any)?.jobReference;
+    const cleanJobId =
+      jr?.jobId ??
+      // fallback: strip project:location prefix if only `id` is present
+      (typeof (jobLike as any)?.id === "string"
+        ? (jobLike as any).id.split(".").pop()
+        : undefined);
 
-    // Wait for completion if you want to block until finished(Not done yet)
-    const jobId = job.id;
-    await job.promise();
+    if (!cleanJobId) {
+      await fs.unlink(tmpPath);
+      return NextResponse.json({ error: "Could not determine jobId" }, { status: 500 });
+    }
+
+    // IMPORTANT: pass location separately, do NOT include it in the ID
+    const job = bq.job(cleanJobId, { location: jr?.location || LOCATION });
+
+    // wait for completion
     const [meta] = await job.getMetadata();
 
     await fs.unlink(tmpPath);
 
+    // Wait for completion if you want to block until finished(Not done yet)
+    // const jobId = job.id;
+    // await job.promise();
+    // const [meta] = await job.getMetadata();
+
+    // await fs.unlink(tmpPath);
+
     if (meta.status?.errorResult) {
       return NextResponse.json(
-        { error: meta.status.errorResult.message, jobId },
+        { error: meta.status.errorResult.message, jobId:cleanJobId },
         { status: 500 }
       );
     }
 
     const outputRows = (meta.statistics as any)?.load?.outputRows ?? null;
 
-    return NextResponse.json({ jobId, status: "done", outputRows });
+    return NextResponse.json({ jobId:cleanJobId, status: "done", outputRows });
   } catch (e: any) {
     return NextResponse.json({ error: e.message ?? "Upload failed" }, { status: 500 });
   }
