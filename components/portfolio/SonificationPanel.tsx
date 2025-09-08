@@ -1,51 +1,81 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import * as Tone from 'tone'; // type-safe access, optional but handy
-import { loadCsv, start as startSonification, stop as stopSonification } from '@/components/portfolio/sonification/sonify';
+import { loadCsv, startPiano, stopPiano } from '@/components/portfolio/sonification/sonify';
 
-type Props = {
-  csvUrl?: string; // e.g., "/GhostFungi.csv"
-};
+type Props = { csvUrl?: string };
 
 export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Global unlock fallback: resume context on first interaction anywhere
+  useEffect(() => {
+    const handler = async () => {
+      try {
+        const Tone = await import('tone');
+        await Tone.start();
+        const ctx = Tone.getContext().rawContext;
+        if (ctx.state !== 'running') await ctx.resume();
+      } catch {}
+      window.removeEventListener('pointerdown', handler as any, true);
+      window.removeEventListener('keydown', handler as any, true);
+    };
+    window.addEventListener('pointerdown', handler as any, true);
+    window.addEventListener('keydown', handler as any, true);
+    return () => {
+      window.removeEventListener('pointerdown', handler as any, true);
+      window.removeEventListener('keydown', handler as any, true);
+    };
+  }, []);
+
+  // Stop any scheduled audio when the component unmounts
+  useEffect(() => {
+    return () => {
+      try { stopPiano(); } catch {}
+    };
+  }, []);
+
   const onStart = async () => {
     if (busy) return;
+    setBusy(true);
     try {
-      setBusy(true);
-      // unlock audio (must be inside this click)
+      // Import Tone only on user click to avoid autoplay warnings on page load
+      const Tone = await import('tone');
       await Tone.start();
       const ctx = Tone.getContext().rawContext;
       if (ctx.state !== 'running') await ctx.resume();
+      // Snappier first note
+      Tone.getContext().lookAhead = 0.02;
 
+      // Load the CSV once
       if (!loaded) {
-        const sum = await loadCsv(csvUrl);
-        console.log('CSV summary:', sum);
+        const summary = await loadCsv(csvUrl);
+        console.log('CSV summary:', summary);
         setLoaded(true);
       }
 
-      await startSonification({
-        timeCompression: 50,
+      // Start piano sonification with sane defaults (audible notes)
+      await startPiano({
+        timeCompression: 5,
         smoothingWindow: 5,
-        controlRateHz: 100,
-        freqMin: 220,
-        freqMax: 660,
-        cutoffMin: 300,
-        cutoffMax: 5000,
+        stepRateHz: 3,
+        scaleMidiLow: 48,   // C3
+        scaleMidiHigh: 84,  // C6
+        velocity: 0.9,
+        noteLenSec: 0.25,
+        reverbWet: 0.2,
       });
-    } catch (err: any) {
-      alert(`Failed: ${err?.message || err}`);
+    } catch (e: any) {
+      alert(`Failed: ${e?.message || e}`);
     } finally {
       setBusy(false);
     }
   };
 
   const onStop = () => {
-    try { stopSonification(); } catch {}
+    try { stopPiano(); } catch {}
   };
 
   return (
@@ -55,7 +85,7 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Play the mushroom’s electrical signals as sound. Source: <code>{csvUrl}</code>
+          Play the mushroom’s electrical signals as a piano. Source: <code>{csvUrl}</code>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <button
@@ -67,7 +97,8 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
           </button>
           <button
             onClick={onStop}
-            className="px-3 py-1.5 rounded-md bg-rose-500 text-white hover:bg-rose-600"
+            className="px-3 py-1.5 rounded-md bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+            disabled={busy}
           >
             Stop
           </button>
