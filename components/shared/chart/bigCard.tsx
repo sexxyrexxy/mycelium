@@ -52,7 +52,7 @@ export function BigCard({
         <p className="mt-4 text-gray-200 text-lg font-semibold">{copiers}</p>
         <p className="text-sm text-gray-400">Copiers</p>
         <Button asChild variant="ghost">
-          <Link href="/cart">View</Link>
+          <Link href="/portfolio/mushroom">View</Link>
         </Button>
       </CardContent>
 
