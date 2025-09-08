@@ -2,6 +2,7 @@
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { UploadPage } from "@/components/upload/upload";
 
 interface PortfolioItem {
   symbol: string;
@@ -121,6 +122,13 @@ export default function PortfolioList() {
             ))}
           </tbody>
         </table>
+        <div className="p-5">
+          <Card className="p-4 bg-grey shadow-none border-none">
+            <div className="flex justify-end">
+              <UploadPage />
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );
