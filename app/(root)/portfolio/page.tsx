@@ -51,7 +51,10 @@ const items: PortfolioItem[] = [
 export default function PortfolioList() {
   return (
     <div>
-      <h1 className="text-large font-bold p-5">My Mushrooms</h1>
+      <div className="flex items-center justify-between p-5">
+        <h1 className="text-large font-bold">My Mushrooms</h1>
+        <UploadPage />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -122,13 +125,6 @@ export default function PortfolioList() {
             ))}
           </tbody>
         </table>
-        <div className="p-5">
-          <Card className="p-4 bg-grey shadow-none border-none">
-            <div className="flex justify-end">
-              <UploadPage />
-            </div>
-          </Card>
-        </div>
       </div>
     </div>
   );
