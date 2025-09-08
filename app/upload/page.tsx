@@ -1,7 +1,7 @@
 
 import { UploadPage } from "@/components/upload/upload";
 
-const auth = () => {
+const upload = () => {
   return (
     <div>
         <UploadPage />
@@ -9,4 +9,4 @@ const auth = () => {
   );
 };
 
-export default auth;
+export default upload;
