@@ -19,7 +19,7 @@ const MushroomCard: React.FC<MushroomCardProps> = ({
   href = "/product/",
 }) => {
   return (
-    <Card className="w-full max-w-sm pt-0">
+    <Card className="w-full max-w-sm pt-0 bg-[#AAA432]">
       {/* Image / Link */}
       <CardHeader className="!p-0 relative h-60">
         <Link href={href}>
@@ -35,8 +35,8 @@ const MushroomCard: React.FC<MushroomCardProps> = ({
 
       {/* Card Content */}
       <CardContent
-        className="p-4 grid gap-4"
-        //style={{ backgroundColor: "#AAA432" }}
+        className="p-4 grid gap-4 text-white"
+        style={{ backgroundColor: "#AAA432" }}
       >
         <div>
           <h2 className="text-m">{name}</h2>
@@ -47,7 +47,10 @@ const MushroomCard: React.FC<MushroomCardProps> = ({
           <p className="text-xs">{description || `Info about ${name}`}</p>
 
           {/* Grow button navigates using router */}
-          <Button asChild>
+          <Button
+            asChild
+            className="bg-[#AAA432] text-white border border-white hover:bg-[#8f9030] px-4 py-2 rounded-md"
+          >
             <Link href={`/grow/${name.toLowerCase().replace(/\s+/g, "")}`}>
               Grow
             </Link>
