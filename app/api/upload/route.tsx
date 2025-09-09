@@ -36,16 +36,16 @@ export async function POST(req: NextRequest) {
         sourceFormat: "CSV",
         skipLeadingRows: 1,
         writeDisposition: "WRITE_APPEND",
-        autodetect: false,
-        schema: {
-          fields: [
-            { name: "Msuh_ID",       type: "INTEGER" },
-            { name: "Type_of_Mush",  type: "STRING" },
-            { name: "Name",          type: "STRING" },
-            { name: "Timestamp",     type: "TIME" },   // or TIMESTAMP if date+time
-            { name: "Signal_mV",     type: "FLOAT" },
-          ],
-        },
+        autodetect: true,
+        // schema: {
+        //   fields: [
+        //     { name: "Msuh_ID",       type: "INTEGER" },
+        //     { name: "Type_of_Mush",  type: "STRING" },
+        //     { name: "Name",          type: "STRING" },
+        //     { name: "Timestamp",     type: "TIME" },   // or TIMESTAMP if date+time
+        //     { name: "Signal_mV",     type: "FLOAT" },
+        //   ],
+        // },
       }); // cast so TS knows this is a Job
 
      // 4) Rehydrate a Job handle (jobLike may be a plain object)
