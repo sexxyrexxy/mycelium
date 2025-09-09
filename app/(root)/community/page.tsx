@@ -15,8 +15,8 @@ const categories: ("All" | MushroomKind)[] = [
   "King Stropharia",
   "Enokitake",
   "King Oyster",
-  "Lion’s Mane",
-  "Pink Oyster",
+  // "Lion’s Mane",
+  // "Pink Oyster",
   "Turkey Tail",
   "Wood Blewit",
 ];

@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import { MushroomProfile } from "./types";
+import Link from "next/link";
 
 // ---------- Mycelium SVG background ----------
 const MYCELIUM_BG = `url("data:image/svg+xml;utf8,
@@ -25,7 +26,9 @@ const MYCELIUM_BG = `url("data:image/svg+xml;utf8,
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-white/5 px-2 py-2 ring-1 ring-white/10">
-      <div className="text-[10px] uppercase tracking-wide text-neutral-300">{label}</div>
+      <div className="text-[10px] uppercase tracking-wide text-neutral-300">
+        {label}
+      </div>
       <div className="mt-0.5 text-sm font-semibold">{value}</div>
     </div>
   );
@@ -83,7 +86,9 @@ export default function ProfileCard({ p }: { p: MushroomProfile }) {
                 {p.kind}
               </span>
               {typeof p.followers === "number" && (
-                <span className="opacity-80">{p.followers.toLocaleString()} followers</span>
+                <span className="opacity-80">
+                  {p.followers.toLocaleString()} followers
+                </span>
               )}
             </div>
           </div>
@@ -96,8 +101,14 @@ export default function ProfileCard({ p }: { p: MushroomProfile }) {
       {/* Stats */}
       <div className="relative z-10 grid grid-cols-3 gap-2 border-t border-white/10 p-4 text-center">
         <Stat label="Growth" value={`${p.growthDays}d`} />
-        <Stat label="Spawned" value={p.spawnDate ? new Date(p.spawnDate).toLocaleDateString() : "—"} />
-        <Stat label="Yield" value={typeof p.yieldGrams === "number" ? `${p.yieldGrams}g` : "—"} />
+        <Stat
+          label="Spawned"
+          value={p.spawnDate ? new Date(p.spawnDate).toLocaleDateString() : "—"}
+        />
+        <Stat
+          label="Yield"
+          value={typeof p.yieldGrams === "number" ? `${p.yieldGrams}g` : "—"}
+        />
       </div>
 
       {/* Footer */}
@@ -106,6 +117,7 @@ export default function ProfileCard({ p }: { p: MushroomProfile }) {
           className="rounded-xl px-3 py-1.5 text-sm font-medium text-white ring-1 ring-white/15 transition hover:bg-white/10"
           aria-label={`View ${p.name}'s profile`}
         >
+          <Link href="portfolio/mushroom"></Link>
           View
         </button>
         <button
