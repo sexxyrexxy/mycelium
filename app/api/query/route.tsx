@@ -27,7 +27,6 @@ export async function GET() {
 
 return NextResponse.json(normalized);
 
-    return NextResponse.json(rows); // return JSON to frontend
   } catch (err) {
     console.error("BigQuery error:", err);
     return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
