@@ -117,8 +117,7 @@ export default function ProfileCard({ p }: { p: MushroomProfile }) {
           className="rounded-xl px-3 py-1.5 text-sm font-medium text-white ring-1 ring-white/15 transition hover:bg-white/10"
           aria-label={`View ${p.name}'s profile`}
         >
-          <Link href="portfolio/mushroom"></Link>
-          View
+          <Link href="portfolio/mushroom">View</Link>
         </button>
         <button
           className="rounded-xl px-3 py-1.5 text-sm font-medium text-emerald-300 ring-1 ring-emerald-400/30 transition hover:bg-emerald-500/10"
