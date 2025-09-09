@@ -1,45 +1,3 @@
-// import "../assets/styles/globals.css";
-// import Image from "next/image";
-// import MushroomCard from "@/components/shared/mushroom/mushroom-card";
-// import { Button } from "@/components/ui/button";
-
-// const Mushrooms = [
-
-// ]
-// const Homepage = () => {
-//   return (
-//     <>
-//       <div className="h-[500px] relative">
-//         <Image
-//           src="/images/landing-page-image.jpg"
-//           alt="image mushroom"
-//           fill
-//           className="object-cover"
-//           sizes="100vw"
-//           priority
-//         />
-
-//         {/* Overlay text */}
-//         <div className="absolute inset-0 flex flex-col items-start justify-center text-white wrapper">
-//           <h1 className="font-bold text-5xl drop-shadow-lg">Mycelium</h1>
-//           <p className="text-2xl mt-4 drop-shadow-lg">
-//             A look into the mushroom mind
-//           </p>
-//         </div>
-//       </div>
-//       <div className="p-5">
-//         <div className=" grid grid-cols-3 gap-4 justify-items-center">
-//           <MushroomCard />
-//           <MushroomCard />
-//           <MushroomCard />
-//           <MushroomCard />
-//           <MushroomCard />
-//         </div>
-//       </div>
-//     </>
-//   );
-// };
-
 "use client"; // For build error handling
 
 import { useState } from "react";
@@ -52,42 +10,40 @@ export default function Homepage() {
 
   const mushrooms = [
     {
-      img: "/images/oyster-mushroom.jpg",
       name: "Oyster",
       species: "Pleurotus ostreatus",
-      description: "Oyster mushroom grows in rainforests etc.",
+      description:
+        "Delicate, fan-shaped mushrooms often found on decaying wood.",
     },
     {
-      img: "/images/shiitake.jpg",
       name: "Shiitake",
       species: "Lentinula edodes",
-      description: "Popular in Asian cuisine.",
+      description: "Savory, meaty mushrooms prized in Asian cuisine.",
     },
     {
-      img: "/images/velvet-shank.jpg",
       name: "Velvet Shank",
       species: "Flammulina velutipes",
-      description: "Found on trees in winter.",
+      description: "Slim, winter-loving mushrooms that grow on tree trunks.",
     },
     {
-      img: "/images/puffball.jpg",
       name: "Puffball",
       species: "Lycoperdon perlatum",
-      description: "Round white fungi.",
+      description: "Round fungi that release spores when mature.",
     },
     {
-      img: "/images/fly-agaric.jpg",
       name: "Fly Agaric",
       species: "Amanita muscaria",
-      description: "Iconic red mushroom with white spots.",
+      description: "Iconic red mushroom with white spots, toxic but striking.",
     },
     {
-      img: "/images/porcini.jpg",
       name: "Porcini",
       species: "Boletus edulis",
-      description: "Edible and highly prized.",
+      description: "Nutty, flavorful mushrooms highly sought after by chefs.",
     },
-  ];
+  ].map((m) => ({
+    ...m,
+    img: `/images/${m.name.toLowerCase().replace(/\s+/g, "-")}.jpg`,
+  }));
 
   const filteredMushrooms = mushrooms.filter(
     (m) =>

@@ -34,26 +34,23 @@ const MushroomCard: React.FC<MushroomCardProps> = ({
       </CardHeader>
 
       {/* Card Content */}
-      <CardContent className="p-4 grid gap-4">
+      <CardContent
+        className="p-4 grid gap-4"
+        //style={{ backgroundColor: "#AAA432" }}
+      >
         <div>
-          <Link href={href} className="hover:underline">
-            <h2 className="text-sm font-medium">{name}</h2>
-            <div className="text-xs">{species}</div>
-          </Link>
+          <h2 className="text-m">{name}</h2>
+          <p className="text-xs">{species}</p>
         </div>
 
         <div className="flex justify-between items-center gap-4">
           <p className="text-xs">{description || `Info about ${name}`}</p>
 
           {/* Grow button navigates using router */}
-          <Button
-            onClick={() => {
-              if (typeof window !== "undefined") {
-                window.location.href = href;
-              }
-            }}
-          >
-            Grow
+          <Button asChild>
+            <Link href={`/grow/${name.toLowerCase().replace(/\s+/g, "")}`}>
+              Grow
+            </Link>
           </Button>
         </div>
       </CardContent>
