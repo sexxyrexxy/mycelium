@@ -11,7 +11,7 @@ const Menu = () => {
         <Button asChild variant="ghost">
           <Link
             href="/home"
-            className={`${kavoon.className} text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
+            className={` text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
           >
             Home
           </Link>
@@ -19,7 +19,7 @@ const Menu = () => {
         <Button asChild variant="ghost">
           <Link
             href="/portfolio"
-            className={`${kavoon.className} text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
+            className={` text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
           >
             Portfolio
           </Link>
@@ -27,7 +27,7 @@ const Menu = () => {
         <Button asChild variant="ghost">
           <Link
             href="/community"
-            className={`${kavoon.className} text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
+            className={` text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
           >
             Community
           </Link>
@@ -42,10 +42,7 @@ const Menu = () => {
           asChild
           className="bg-[#564930] hover:bg-[#C89E4D] text-white font-bold ml-4 rounded-full"
         >
-          <Link
-            href="/auth"
-            className={`${kavoon.className} text-[#564930] text-xl`}
-          >
+          <Link href="/auth" className={` text-[#564930] text-xl`}>
             Login
           </Link>
         </Button>
