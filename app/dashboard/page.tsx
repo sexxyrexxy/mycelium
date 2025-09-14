@@ -13,7 +13,7 @@ export default function Page() {
     (async () => {
       try {
         // If your API file is app/api/data/route.ts, change to "/api/data"
-        const res = await fetch("/api/query", { cache: "no-store" });
+        const res = await fetch("/api/query/mushrooms", { cache: "no-store" });
         if (!res.ok) throw new Error(`API ${res.status} ${res.statusText}`);
         const data = await res.json();
         if (!Array.isArray(data)) throw new Error("API did not return an array");
