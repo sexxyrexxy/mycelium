@@ -2,6 +2,8 @@
 
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { UploadPage } from "@/components/upload/upload";
+import Link from "next/link";
 
 interface PortfolioItem {
   symbol: string;
@@ -49,7 +51,11 @@ const items: PortfolioItem[] = [
 
 export default function PortfolioList() {
   return (
-    <Card className="w-full overflow-hidden border border-gray-200 shadow-sm">
+    <div>
+      <div className="flex items-center justify-between p-5">
+        <h1 className="text-large font-bold">My Mushrooms</h1>
+        <UploadPage />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
@@ -113,7 +119,7 @@ export default function PortfolioList() {
                 </td>
                 <td className="px-4 py-3">
                   <button className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1 text-xs">
-                    View
+                    <Link href="/portfolio/mushroom">View</Link>
                   </button>
                 </td>
               </tr>
@@ -121,6 +127,6 @@ export default function PortfolioList() {
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }
