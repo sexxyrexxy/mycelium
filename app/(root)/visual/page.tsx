@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import SimpleChart, { Point } from "@/components/portfolio/SimpleChart";
 import type { Time } from "lightweight-charts";
+import { useSearchParams } from "next/navigation";
 
 // HH:MM:SS | seconds | ms | ISO → Time
 function toTime(x: string | number): Time {
@@ -10,21 +11,17 @@ function toTime(x: string | number): Time {
     return Math.floor(x) as unknown as Time;
   const s = String(x).trim();
 
-  // HH:MM:SS
+  // HH:MM:SS(.ms)
   const m = s.match(/^(\d+):(\d{2}):(\d{2})(?:\.\d+)?$/);
   if (m) {
-    const h = +m[1],
-      mm = +m[2],
-      ss = +m[3];
+    const h = +m[1], mm = +m[2], ss = +m[3];
     return (h * 3600 + mm * 60 + ss) as unknown as Time;
   }
 
   // numeric seconds or ms
   const n = Number(s);
   if (Number.isFinite(n)) {
-    return (n >= 1e11
-      ? Math.floor(n / 1000)
-      : Math.floor(n)) as unknown as Time;
+    return (n >= 1e11 ? Math.floor(n / 1000) : Math.floor(n)) as unknown as Time;
   }
 
   // ISO date
@@ -32,23 +29,20 @@ function toTime(x: string | number): Time {
   return Math.floor((Number.isNaN(ts) ? 0 : ts) / 1000) as unknown as Time;
 }
 
+// (kept here but unused now)
 // Robust two-column CSV: timestamp,value (ignores blank/NaN rows)
 function parseTwoColCSV(text: string): Point[] {
   const lines = text.replace(/\r/g, "\n").split("\n").filter(Boolean);
   if (lines.length < 2) return [];
-
   const out: Point[] = [];
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-
-    const [tRaw, vRaw] = line.split(","); // your file is simple comma-only
+    const [tRaw, vRaw] = line.split(",");
     if (!tRaw || !vRaw) continue;
-
     const t = toTime(tRaw);
     const v = Number(String(vRaw).trim());
     if (!Number.isFinite(v)) continue;
-
     out.push({ time: t, value: v });
   }
   return out;
@@ -56,25 +50,56 @@ function parseTwoColCSV(text: string): Point[] {
 
 export default function VisualizationPage() {
   const [data, setData] = useState<Point[]>([]);
+  const search = useSearchParams();
+  const id = search.get("id") ?? "1";          // /visual?id=42 → fetch /api/mushroom/42
+  const limit = 10000;                          // tweak if you want
 
   useEffect(() => {
-    // cache-bust during dev in case the browser caches the CSV
-    fetch(`/MushroomData1.csv?dev=${Date.now()}`)
-      .then((r) => r.text())
-      .then((txt) => {
-        const pts = parseTwoColCSV(txt);
-        console.log(
-          "[page] loaded rows:",
-          pts.length,
-          "first:",
-          pts[0],
-          "last:",
-          pts[pts.length - 1]
-        );
-        setData(pts);
-      })
-      .catch((e) => console.error("CSV fetch/parse error", e));
-  }, []);
+    (async () => {
+      try {
+        const res = await fetch(`/api/mushroom/${encodeURIComponent(id)}?limit=${limit}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        // Support both shapes:
+        // A) { mushId, signals: [{ timestamp, signal }] }
+        // B) rows: [{ Timestamp: "HH:MM:SS", Signal_mV }]
+        let points: Point[] = [];
+
+        if (Array.isArray(json?.signals)) {
+          points = json.signals
+            .map((s: any) => ({ time: toTime(s.timestamp), value: Number(s.signal) }))
+            .filter((p: Point) => Number.isFinite(p.value));
+        } else if (Array.isArray(json)) {
+          // some older routes return rows directly
+          points = json
+            .map((r: any) => ({
+              time: toTime((r?.Timestamp?.value ?? r?.Timestamp) as any),
+              value: Number(r?.Signal_mV ?? r?.value),
+            }))
+            .filter((p: Point) => Number.isFinite(p.value));
+        } else if (Array.isArray(json?.rows)) {
+          points = json.rows
+            .map((r: any) => ({
+              time: toTime((r?.Timestamp?.value ?? r?.Timestamp) as any),
+              value: Number(r?.Signal_mV ?? r?.value),
+            }))
+            .filter((p: Point) => Number.isFinite(p.value));
+        }
+
+        // (SimpleChart sorts internally, but sorting here is fine too)
+        points.sort((a, b) => Number(a.time) - Number(b.time));
+
+        console.log("[page] fetched points:", points.length, "sample:", points[0], points.at(-1));
+        setData(points);
+      } catch (e) {
+        console.error("API fetch/parse error:", e);
+        setData([]);
+      }
+    })();
+  }, [id]);
 
   return (
     <main style={{ padding: 16 }}>
