@@ -425,6 +425,384 @@ const growData: Record<string, MushroomData> = {
       air: "Natural forest airflow",
     },
   },
+
+  winecap: {
+    common: "Wine Cap",
+    species: "Stropharia rugosoannulata",
+    intro:
+      "Wine Cap mushrooms, also known as King Stropharia or Garden Giant, are prized for their large burgundy caps and adaptability to garden settings. Unlike many gourmet mushrooms, they do not require sterile indoor conditions, as they thrive in outdoor beds made of wood chips or straw. They are excellent for beginner cultivators, providing a dual benefit of edible mushrooms and improved soil fertility through their decomposing action. Wine Caps are meaty, with a mild potato-like flavor, and they integrate well into soups, sautés, and roasted dishes.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["Grain or sawdust spawn"] },
+        { name: "Substrate", subItems: ["Wood chips", "Straw", "Leaf litter"] },
+        {
+          name: "Bed area",
+          subItems: ["Shaded garden patch or woodland edge"],
+        },
+      ],
+    },
+    steps: [
+      {
+        title: "Bed Preparation",
+        subSteps: [
+          "Select shaded, moist outdoor location",
+          "Spread wood chips or straw 10–15 cm deep",
+        ],
+      },
+      {
+        title: "Inoculation",
+        subSteps: ["Mix spawn into substrate layers", "Water thoroughly"],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Maintain moisture by watering weekly",
+          "Mycelium colonizes bed in 2–3 months",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Occurs naturally in warm, wet weather",
+          "Look for burgundy caps pushing through mulch",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: ["Cut stems cleanly at base before caps flatten"],
+      },
+    ],
+    tips: [
+      "Top up beds yearly with fresh wood chips",
+      "Keep substrate consistently moist",
+      "Harvest before gills darken",
+    ],
+    enhancements: [
+      "Integrate into permaculture gardens",
+      "Grow alongside vegetables for pest reduction",
+    ],
+    facts: {
+      temperature: "15 - 25°C",
+      humidity: "70 - 85%",
+      air: "Outdoor natural airflow",
+    },
+  },
+
+  enoki: {
+    common: "Enoki",
+    species: "Flammulina velutipes",
+    intro:
+      "Winter Needle, also known as Enoki or Enokitake, is a delicate mushroom with long, slender white stems and tiny caps. It is traditionally cultivated in cool, controlled environments, where low light and cold conditions encourage its characteristic shape. In nature, it grows on dead hardwoods during late fall and winter, often surviving freezing temperatures. Its crisp texture and mild, slightly fruity flavor make it popular in soups, hotpots, and stir-fries, particularly in East Asian cuisine.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["Enoki grain spawn"] },
+        {
+          name: "Substrate",
+          subItems: ["Sterilized sawdust", "Hardwood chips"],
+        },
+        { name: "Containers", subItems: ["Glass jars or plastic bottles"] },
+      ],
+    },
+    steps: [
+      {
+        title: "Substrate Preparation",
+        subSteps: [
+          "Sterilize sawdust-based substrate",
+          "Load into jars or bottles",
+        ],
+      },
+      {
+        title: "Inoculation",
+        subSteps: ["Introduce grain spawn into containers"],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Keep at 18–20°C until substrate is colonized",
+          "Takes 2–3 weeks",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Move to cooler environment (5–10°C)",
+          "Limit light exposure to encourage long stems",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: ["Cut clusters at base before caps spread"],
+      },
+    ],
+    tips: [
+      "Maintain high CO₂ for longer stems",
+      "Harvest before caps darken",
+      "Use sterilized containers to avoid contamination",
+    ],
+    enhancements: [
+      "Grow for winter markets",
+      "Experiment with natural logs outdoors",
+    ],
+    facts: {
+      temperature: "5 - 15°C",
+      humidity: "85 - 95%",
+      air: "Filtered low-airflow environment",
+    },
+  },
+
+  kingoyster: {
+    common: "King Oyster",
+    species: "Pleurotus eryngii",
+    intro:
+      "Royal Pleurotus, also known as King Oyster Mushroom, is a thick-stemmed mushroom with a savory umami flavor and dense, meaty texture. Unlike other oyster mushrooms, it produces a large stem that is prized in gourmet cooking for grilling, braising, or slicing into medallions. It is relatively easy to cultivate indoors on enriched substrates such as supplemented sawdust. Its long shelf life and culinary versatility make it a favorite among commercial growers and chefs alike.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["King oyster grain spawn"] },
+        {
+          name: "Substrate",
+          subItems: ["Sterilized sawdust with bran supplement"],
+        },
+        { name: "Containers", subItems: ["Grow bags or bottles"] },
+      ],
+    },
+    steps: [
+      {
+        title: "Substrate Preparation",
+        subSteps: ["Mix sawdust with bran", "Sterilize thoroughly"],
+      },
+      {
+        title: "Inoculation",
+        subSteps: ["Introduce spawn under sterile conditions"],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Keep at 20–24°C until substrate fully colonized",
+          "Allow 3–4 weeks",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Lower temperature to 15–18°C",
+          "Provide light and fresh air to encourage fruiting",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: ["Twist and pull mushrooms gently when caps remain convex"],
+      },
+    ],
+    tips: [
+      "Provide good airflow to avoid malformed stems",
+      "Harvest while caps are small for best texture",
+      "Avoid excessive humidity to reduce bacterial blotch",
+    ],
+    enhancements: [
+      "Market as gourmet ‘steak mushroom’",
+      "Dry or pickle stems for preservation",
+    ],
+    facts: {
+      temperature: "15 - 20°C",
+      humidity: "80 - 90%",
+      air: "Fresh air exchange every few hours",
+    },
+  },
+
+  lionspride: {
+    common: "Lion's Pride",
+    species: "Hericium erinaceus",
+    intro:
+      "Lion’s Pride, commonly called Lion’s Mane, is a striking white mushroom with cascading spines resembling a lion’s mane. It is valued both as a gourmet delicacy and a medicinal mushroom, containing compounds linked to cognitive support and nerve regeneration. Its texture is often compared to crab or lobster, making it a seafood substitute in cooking. It grows well on hardwood logs or sterilized sawdust blocks, fruiting in cool, humid environments.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["Lion’s Mane sawdust spawn"] },
+        { name: "Substrate", subItems: ["Sterilized hardwood sawdust"] },
+        { name: "Containers", subItems: ["Grow bags with slits"] },
+      ],
+    },
+    steps: [
+      {
+        title: "Substrate Preparation",
+        subSteps: [
+          "Sterilize hardwood sawdust blocks",
+          "Cool before inoculation",
+        ],
+      },
+      {
+        title: "Inoculation",
+        subSteps: ["Introduce spawn into sawdust blocks"],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Maintain 20–24°C until fully colonized (2–3 weeks)",
+          "Mycelium appears white and fluffy",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Lower temperature to 15–20°C",
+          "Cut slits in bag to allow spines to form",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: ["Harvest clusters when spines reach 1–2 cm length"],
+      },
+    ],
+    tips: [
+      "Avoid direct misting, keep ambient humidity instead",
+      "Harvest early to prevent bitterness",
+      "Grow on logs outdoors for seasonal harvests",
+    ],
+    enhancements: [
+      "Market as brain-health mushroom",
+      "Use as a seafood substitute in vegan cooking",
+    ],
+    facts: {
+      temperature: "15 - 20°C",
+      humidity: "85 - 95%",
+      air: "Gentle fresh airflow",
+    },
+  },
+
+  rosecluster: {
+    common: "Rosé Cluster",
+    species: "Pleurotus djamor",
+    intro:
+      "Rosé Cluster, also known as Pink Oyster Mushroom, is a vibrant mushroom with striking salmon-pink caps that grow in large, dense clusters. It is fast-growing, easy to cultivate, and highly productive, making it a favorite for home growers. Though delicate and with a shorter shelf life, it has a rich, savory flavor that intensifies when cooked, especially in stir-fries and sautés. Its visual appeal also makes it popular for specialty markets.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["Pink oyster grain spawn"] },
+        {
+          name: "Substrate",
+          subItems: ["Pasteurized straw", "Sterilized sawdust"],
+        },
+        { name: "Containers", subItems: ["Plastic grow bags"] },
+      ],
+    },
+    steps: [
+      {
+        title: "Substrate Preparation",
+        subSteps: [
+          "Pasteurize straw or sterilize sawdust",
+          "Cool before inoculation",
+        ],
+      },
+      {
+        title: "Inoculation",
+        subSteps: ["Layer substrate with spawn in bags"],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Keep at 24–30°C for rapid colonization",
+          "Takes 10–14 days",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Provide indirect light and high humidity",
+          "Cut slits in bags to allow clusters to form",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: ["Harvest whole clusters when edges just start to curl"],
+      },
+    ],
+    tips: [
+      "Grow quickly and harvest promptly",
+      "Do not refrigerate for long periods",
+      "Use fresh for best flavor",
+    ],
+    enhancements: [
+      "Sell as an eye-catching specialty mushroom",
+      "Use for educational demonstrations",
+    ],
+    facts: {
+      temperature: "24 - 30°C",
+      humidity: "80 - 95%",
+      air: "Frequent fresh air exchange",
+    },
+  },
+
+  foresttail: {
+    common: "Turkey Tail",
+    species: "Trametes versicolor",
+    intro:
+      "Forest Tail, also known as Turkey Tail, is a striking polypore mushroom recognized for its colorful, fan-shaped layers resembling a turkey’s tail feathers. It is one of the most studied medicinal mushrooms, prized for immune-boosting compounds like polysaccharide-K (PSK). While not cultivated for gourmet purposes due to its leathery texture, it is grown for medicinal extracts, teas, and supplements. It grows readily on hardwood logs and sawdust blocks, colonizing aggressively.",
+    materials: {
+      title: "Materials Needed",
+      items: [
+        { name: "Spawn", subItems: ["Turkey Tail sawdust spawn"] },
+        {
+          name: "Substrate",
+          subItems: ["Sterilized hardwood sawdust", "Logs"],
+        },
+        {
+          name: "Containers",
+          subItems: ["Grow bags or outdoor inoculation tools"],
+        },
+      ],
+    },
+    steps: [
+      {
+        title: "Substrate Preparation",
+        subSteps: ["Prepare hardwood sawdust blocks or fresh logs"],
+      },
+      {
+        title: "Inoculation",
+        subSteps: [
+          "Introduce spawn into logs or bags",
+          "Seal with wax (for logs) or tie bags shut",
+        ],
+      },
+      {
+        title: "Incubation",
+        subSteps: [
+          "Maintain 20–25°C until fully colonized",
+          "Colonization may take 2–3 months on logs",
+        ],
+      },
+      {
+        title: "Fruiting",
+        subSteps: [
+          "Occurs naturally outdoors or with controlled humidity indoors",
+          "Colorful bracket formations emerge on substrate surface",
+        ],
+      },
+      {
+        title: "Harvesting",
+        subSteps: [
+          "Cut fruiting bodies at base for drying",
+          "Use primarily for tea or extracts",
+        ],
+      },
+    ],
+    tips: [
+      "Best cultivated outdoors on logs",
+      "Dry thoroughly before storage",
+      "Select younger specimens for stronger potency",
+    ],
+    enhancements: [
+      "Process into tinctures or teas",
+      "Market as immune-support mushroom",
+    ],
+    facts: {
+      temperature: "18 - 25°C",
+      humidity: "70 - 90%",
+      air: "Outdoor or controlled indoor airflow",
+    },
+  },
 };
 
 export default function GrowPage({ params }: GrowPageProps) {

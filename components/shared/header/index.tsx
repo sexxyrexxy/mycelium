@@ -10,7 +10,7 @@ const Header = () => {
     <header className="w-full ">
       <div className="wrapper flex-between">
         <div className="flex-start">
-          <Link href="/" className="flex-start">
+          <Link href="/home" className="flex-start">
             <Image
               src="/images/mushroom-logo.png"
               alt={APP_NAME}

@@ -12,7 +12,7 @@ export const sampleProfiles: MushroomProfile[] = [
     yieldGrams: 950,
     followers: 204,
     featured: true,
-    bio: "Classic oyster mushroom cultivated on straw logs."
+    bio: "Classic oyster mushroom cultivated on straw logs.",
   },
   {
     id: "shi-1",
@@ -24,7 +24,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-07-12",
     yieldGrams: 700,
     followers: 118,
-    bio: "Oak-log cultivated shiitake with rich umami."
+    bio: "Oak-log cultivated shiitake with rich umami.",
   },
   {
     id: "stroph-1",
@@ -36,7 +36,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-07-20",
     yieldGrams: 1200,
     followers: 62,
-    bio: "Also called Wine Cap, thrives in outdoor wood chip beds."
+    bio: "Also called Wine Cap, thrives in outdoor wood chip beds.",
   },
   {
     id: "eno-1",
@@ -48,7 +48,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-08-30",
     yieldGrams: 430,
     followers: 77,
-    bio: "Slender, white fruiting bodies grown in cool temps."
+    bio: "Slender, white fruiting bodies grown in cool temps.",
   },
   {
     id: "king-1",
@@ -60,7 +60,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-07-28",
     yieldGrams: 800,
     followers: 95,
-    bio: "Meaty texture, prized in gourmet cooking."
+    bio: "Meaty texture, prized in gourmet cooking.",
   },
   {
     id: "lion-1",
@@ -72,7 +72,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-08-02",
     yieldGrams: 600,
     followers: 77,
-    bio: "Coral-like appearance; renowned for nootropic benefits."
+    bio: "Coral-like appearance; renowned for nootropic benefits.",
   },
   {
     id: "pink-1",
@@ -84,7 +84,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-08-25",
     yieldGrams: 500,
     followers: 82,
-    bio: "Vivid pink caps; fast fruiting tropical oyster strain."
+    bio: "Vivid pink caps; fast fruiting tropical oyster strain.",
   },
   {
     id: "turkey-1",
@@ -96,7 +96,7 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-06-15",
     yieldGrams: 300,
     followers: 54,
-    bio: "Medicinal polypore with colorful concentric rings."
+    bio: "Medicinal polypore with colorful concentric rings.",
   },
   {
     id: "blewit-1",
@@ -108,6 +108,6 @@ export const sampleProfiles: MushroomProfile[] = [
     spawnDate: "2025-08-18",
     yieldGrams: 650,
     followers: 66,
-    bio: "Purple-hued mushroom found in leaf litter."
-  }
+    bio: "Purple-hued mushroom found in leaf litter.",
+  },
 ];

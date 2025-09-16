@@ -10,10 +10,18 @@ const Menu = () => {
       <nav className="hidden md:flex w-full max-w-x gap-1">
         <Button asChild variant="ghost">
           <Link
-            href="/home"
+            href="/about"
             className={` text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
           >
-            Home
+            About
+          </Link>
+        </Button>
+        <Button asChild variant="ghost">
+          <Link
+            href="/"
+            className={` text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl`}
+          >
+            Grow
           </Link>
         </Button>
         <Button asChild variant="ghost">
