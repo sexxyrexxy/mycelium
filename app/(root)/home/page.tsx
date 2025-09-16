@@ -18,7 +18,7 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-6 p-6 bg-gray-50 min-h-screen">
       {/* Summary Box - full width */}
-      {/* <LogoutButton className="rounded-lg bg-green-600 text-white py-2 px-4 hover:bg-green-700"/> */}
+      <LogoutButton className="rounded-lg bg-green-600 text-white py-2 px-4 hover:bg-green-700"/>
       <Card className="shadow border border-gray-200 w-full">
         <CardHeader>
           <CardTitle>Summary</CardTitle>
