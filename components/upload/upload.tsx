@@ -28,7 +28,6 @@
 //   );
 // }
 
-
 "use client";
 import { useRef, useState } from "react";
 
@@ -75,7 +74,7 @@ export const UploadPage = () => {
         type="button"
         onClick={handleButtonClick}
         disabled={busy}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        className="px-4 py-2 bg-white font-bold text-[#564930] rounded hover:bg-[#c6c6c6] drop-shadow-[2px_2px_4px_rgba(0,0,0,0.6)]"
       >
         {busy ? "Uploading…" : "Upload CSV"}
       </button>

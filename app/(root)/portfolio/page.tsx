@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { UploadPage } from "@/components/upload/upload";
 import Link from "next/link";
+import { Kavoon } from "next/font/google";
+const kavoon = Kavoon({ subsets: ["latin"], weight: "400" });
 
 interface PortfolioItem {
   symbol: string;
@@ -52,8 +54,15 @@ const items: PortfolioItem[] = [
 export default function PortfolioList() {
   return (
     <div>
-      <div className="flex items-center justify-between p-5">
-        <h1 className="text-large font-bold">My Mushrooms</h1>
+      <div
+        className="flex items-center justify-between p-15 bg-cover bg-center"
+        style={{ backgroundImage: "url('/images/portfolio-background.jpg')" }}
+      >
+        <h1
+          className={`font-bold text-4xl md:text-2xl ${kavoon.className} text-white drop-shadow-[2px_2px_4px_rgba(0,0,0,0.6)]`}
+        >
+          My Mushrooms
+        </h1>
         <UploadPage />
       </div>
       <div className="overflow-x-auto">
@@ -84,7 +93,7 @@ export default function PortfolioList() {
                   <span
                     className={cn(
                       "text-xs ml-1",
-                      item.change >= 0 ? "text-green-600" : "text-red-600"
+                      item.change >= 0 ? "text-[#AAA432]" : "text-[#AA3232]"
                     )}
                   >
                     {item.change >= 0 ? "+" : ""}
@@ -95,7 +104,7 @@ export default function PortfolioList() {
                 <td
                   className={cn(
                     "px-4 py-3 font-medium",
-                    item.pl >= 0 ? "text-green-600" : "text-red-600"
+                    item.pl >= 0 ? "text-[#AAA432]" : "text-[#AA3232]"
                   )}
                 >
                   {item.pl >= 0 ? "+" : ""}
@@ -104,7 +113,7 @@ export default function PortfolioList() {
                 <td
                   className={cn(
                     "px-4 py-3 font-medium",
-                    item.plPercent >= 0 ? "text-green-600" : "text-red-600"
+                    item.plPercent >= 0 ? "text-[#AAA432]" : "text-[#AA3232]"
                   )}
                 >
                   {item.plPercent.toFixed(2)}%
@@ -113,12 +122,12 @@ export default function PortfolioList() {
                   {item.netValue.toLocaleString()}
                 </td>
                 <td className="px-4 py-3">
-                  <button className="bg-red-500 hover:bg-red-600 text-white rounded px-3 py-1 text-xs">
+                  <button className="bg-[#AA3232] hover:bg-[#731919] text-white rounded px-3 py-1 text-xs">
                     End
                   </button>
                 </td>
                 <td className="px-4 py-3">
-                  <button className="bg-green-500 hover:bg-green-600 text-white rounded px-3 py-1 text-xs">
+                  <button className="bg-[#AAA432] hover:bg-[#7B7622] text-white rounded px-3 py-1 text-xs">
                     <Link href="/portfolio/mushroom">View</Link>
                   </button>
                 </td>
