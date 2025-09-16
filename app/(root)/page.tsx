@@ -43,9 +43,45 @@ export default function Homepage() {
       species: "Boletus edulis",
       description: "Nutty, flavorful mushrooms highly sought after by chefs.",
     },
+    {
+      name: "Wine Cap",
+      species: "Stropharia rugosoannulata",
+      description:
+        "Large burgundy-capped mushrooms known as the Garden Giant, thriving in outdoor wood chip or straw beds.",
+    },
+    {
+      name: "Enoki",
+      species: "Flammulina velutipes",
+      description:
+        "Also called Enoki, these long, slender white mushrooms grow in cool conditions and are popular in soups and stir-fries.",
+    },
+    {
+      name: "King Oyster",
+      species: "Pleurotus eryngii",
+      description:
+        "King Oyster mushrooms with thick stems and savory umami flavor, prized for grilling and gourmet cooking.",
+    },
+    {
+      name: "Lion's Pride",
+      species: "Hericium erinaceus",
+      description:
+        "Lion’s Mane mushrooms with cascading spines, valued for seafood-like texture and medicinal properties.",
+    },
+    {
+      name: "Rosé Cluster",
+      species: "Pleurotus djamor",
+      description:
+        "Vibrant pink oyster mushrooms that grow in dense clusters, fast to cultivate but with a short shelf life.",
+    },
+    {
+      name: "Turkey Tail",
+      species: "Trametes versicolor",
+      description:
+        "Colorful, fan-shaped Turkey Tail mushrooms, prized for their immune-boosting medicinal compounds rather than culinary use.",
+    },
   ].map((m) => ({
     ...m,
-    img: `/images/${m.name.toLowerCase().replace(/\s+/g, "-")}.jpg`,
+    img: `/images/${m.name.toLowerCase().replace(/\s+/g, "")}.jpg`,
   }));
 
   const filteredMushrooms = mushrooms.filter(
