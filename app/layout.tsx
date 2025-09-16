@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   },
   description: APP_DESCRIPTION,
   metadataBase: new URL(SERVER_URL),
+  icons: {
+    icon: "/images/mushroom-logo.png",
+    shortcut: "/images/mushroom-logo.png",
+    apple: "/images/mushroom-logo.png",
+  },
 };
 
 export default function RootLayout({
