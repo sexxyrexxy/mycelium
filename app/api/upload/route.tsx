@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 const PROJECT_ID = "mycelium-470904";
 const DATASET_ID = "MushroomData1";
-const TABLE_ID   = "Table1";
+const TABLE_ID   = "MushroomSignals";
 const LOCATION   = "US";
 const KEY_FILE   = "mycelium-470904-5621723dfeff.json";
 
