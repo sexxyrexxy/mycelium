@@ -60,7 +60,7 @@ export async function GET(
     const [rows] = await bq.query({
       query: `
         SELECT Timestamp, Signal_mV
-        FROM \`mycelium-470904.MushroomData1.Table1\`
+        FROM \`mycelium-470904.MushroomData1.Mushroom_Signal\`
         WHERE Mush_ID = @mushId
         ORDER BY Timestamp ASC
         LIMIT 1000
