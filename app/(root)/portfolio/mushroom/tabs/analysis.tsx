@@ -1,7 +1,9 @@
 "use client";
 
-import * as React from "react";
-import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { drawVoronoiChart } from "@/components/portfolio/network/Network";
+import React, { useRef, useState, useEffect } from "react";
+import { MushroomSprite } from "@/components/portfolio/PixelMushrooms";
 
 import {
   Card,
@@ -11,130 +13,134 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  ChartConfig,
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartConfig,
 } from "@/components/ui/chart";
-import MushroomNetwork from "./network";
-import MushroomSprite from "@/components/portfolio/PixelMushrooms";
 
-export const description = "An interactive line chart";
-
-const chartData = [
-  { timestamp: "2024-09-07T12:00:00", desktop: 220, mobile: 150 },
-  { timestamp: "2024-09-07T12:00:01", desktop: 230, mobile: 160 },
-  { timestamp: "2024-09-07T12:00:02", desktop: 210, mobile: 170 },
-  { timestamp: "2024-09-07T12:00:03", desktop: 250, mobile: 155 },
-  { timestamp: "2024-09-07T12:00:04", desktop: 260, mobile: 180 },
-  { timestamp: "2024-09-07T12:00:05", desktop: 270, mobile: 190 },
-  { timestamp: "2024-09-07T12:00:06", desktop: 240, mobile: 175 },
-  { timestamp: "2024-09-07T12:00:07", desktop: 280, mobile: 160 },
-  { timestamp: "2024-09-07T12:00:08", desktop: 300, mobile: 200 },
-  { timestamp: "2024-09-07T12:00:09", desktop: 320, mobile: 210 },
-  { timestamp: "2024-09-07T12:00:10", desktop: 310, mobile: 195 },
-  { timestamp: "2024-09-07T12:00:11", desktop: 290, mobile: 185 },
-  { timestamp: "2024-09-07T12:00:12", desktop: 305, mobile: 175 },
-  { timestamp: "2024-09-07T12:00:13", desktop: 315, mobile: 165 },
-  { timestamp: "2024-09-07T12:00:14", desktop: 325, mobile: 180 },
-  { timestamp: "2024-09-07T12:00:15", desktop: 330, mobile: 190 },
-  { timestamp: "2024-09-07T12:00:16", desktop: 310, mobile: 185 },
-  { timestamp: "2024-09-07T12:00:17", desktop: 295, mobile: 170 },
-  { timestamp: "2024-09-07T12:00:18", desktop: 285, mobile: 160 },
-  { timestamp: "2024-09-07T12:00:19", desktop: 300, mobile: 175 },
-  { timestamp: "2024-09-07T12:00:20", desktop: 310, mobile: 185 },
-  { timestamp: "2024-09-07T12:00:21", desktop: 320, mobile: 190 },
-  { timestamp: "2024-09-07T12:00:22", desktop: 330, mobile: 200 },
-  { timestamp: "2024-09-07T12:00:23", desktop: 340, mobile: 210 },
-  { timestamp: "2024-09-07T12:00:24", desktop: 350, mobile: 215 },
-  { timestamp: "2024-09-07T12:00:25", desktop: 345, mobile: 220 },
-  { timestamp: "2024-09-07T12:00:26", desktop: 335, mobile: 210 },
-  { timestamp: "2024-09-07T12:00:27", desktop: 325, mobile: 205 },
-  { timestamp: "2024-09-07T12:00:28", desktop: 315, mobile: 195 },
-  { timestamp: "2024-09-07T12:00:29", desktop: 305, mobile: 185 },
-];
-
-const chartConfig = {
-  views: {
-    label: "Signal",
-  },
-  desktop: {
-    label: "Desktop",
-    color: "var(--chart-1)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--chart-2)",
-  },
-} satisfies ChartConfig;
+export const description = "Real-time analysis of Differential Voltage feed with network diagram.";
 
 export function Analysis() {
-  const [activeChart, setActiveChart] =
-    React.useState<keyof typeof chartConfig>("desktop");
+  const [rawSignals, setRawSignals] = useState<number[]>([]);
+  const [times, setTimes] = useState<number[]>([]);
+  const [visibleData, setVisibleData] = useState<{ timestamp: number; signal: number }[]>([]);
+  const [mappedSpeeds, setMappedSpeeds] = useState<number[]>([]);
+  const [normalizedBaseline, setNormalizedBaseline] = useState<number[]>([]);
+  const [spikes, setSpikes] = useState<number[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const [visibleData, setVisibleData] = React.useState<
-    { timestamp: string; desktop: number; mobile: number }[]
-  >([]);
+  const chartConfig = {
+    signal: {
+      label: "Signal",
+      color: "var(--chart-1)",
+    },
+  } satisfies ChartConfig;
 
-  const startTime = React.useRef(Date.now());
+  // --- Line chart CSV worker ---
+  useEffect(() => {
+    const worker = new Worker("/Workers/ExtractSignals.js");
 
-  React.useEffect(() => {
+    fetch("/GhostFungi.csv")
+      .then(res => res.text())
+      .then(csvText => worker.postMessage({ type: "csv", data: csvText }));
+
+    worker.onmessage = event => {
+      const { signals, times: workerTimes, mappedSpeeds: speeds, normalizedBaseline: baseline, error } = event.data;
+      if (error) {
+        console.error(error);
+        return;
+      }
+      setRawSignals(signals);
+      setTimes(workerTimes);
+      setMappedSpeeds(speeds || []);
+      setNormalizedBaseline(baseline || []);
+      setVisibleData([]);
+      setCurrentIndex(0);
+    };
+
+    return () => worker.terminate();
+  }, []);
+
+  // --- Initialize Voronoi ---
+  useEffect(() => {
+    if (!svgRef.current) return;
+
+    const ProcessDataWorker = new Worker("/Workers/ProcessData.js");
+    let cleanup: (() => void) | null = null;
+
+    fetch("/GhostFungi.csv")
+      .then(res => res.text())
+      .then(csvText => ProcessDataWorker.postMessage({ type: "csv", data: csvText }));
+
+    ProcessDataWorker.onmessage = event => {
+      const { mappedSpeeds: workerSpeeds, normalizedBaseline: workerBaseline, spikes: workerSpikes, error } = event.data;
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      cleanup = drawVoronoiChart(
+        svgRef.current!,
+        800,
+        600,
+        workerSpeeds,
+        workerBaseline,
+        workerSpikes // <-- pass spikes to the chart
+      );
+
+      setMappedSpeeds(workerSpeeds);
+      setNormalizedBaseline(workerBaseline);
+      setSpikes(workerSpikes); // <-- store spikes in state
+    };
+
+    return () => {
+      ProcessDataWorker.terminate();
+      if (cleanup) cleanup();
+    };
+  }, []);
+
+  // --- Stream signals using times array ---
+  useEffect(() => {
+    if (!rawSignals.length || !times.length || !mappedSpeeds.length || !normalizedBaseline.length || !spikes.length) return;
+
+    let index = 0;
     const interval = setInterval(() => {
-      const now = Date.now();
+      setVisibleData(prev => [
+        ...prev,
+        { timestamp: times[index], signal: rawSignals[index] },
+      ]);
 
-      const newPoint = {
-        timestamp: new Date(now).toISOString(),
-        desktop: Math.floor(200 + Math.random() * 200),
-        mobile: Math.floor(150 + Math.random() * 200),
-      };
+      setCurrentIndex(index);
 
-      setVisibleData((prev) => [...prev, newPoint]); // 👈 keep all points
+      index++;
+      if (index >= rawSignals.length) clearInterval(interval);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [rawSignals, times, mappedSpeeds, normalizedBaseline, spikes]);
 
   return (
     <>
-      <Card className="py-4 sm:py-0">
+      <h1 className="text-center text-xl">{description}</h1>
+      <h5 className="text-gray-700 text-center italic mb-5">Metrics update in real time, showing the current state of electrical activity in the network as
+         points are plotted.</h5>
+      <div className="mx-auto mb-10 h-px w-1/4 bg-[#564930]"></div>
+
+      {/* Line chart card */}
+      <Card className="py-4 sm:py-0 mb-10">
         <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
           <div className="flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0">
-            <CardTitle>Electrical Signals</CardTitle>
-            <CardDescription>Real-time feed (auto zoom out)</CardDescription>
-          </div>
-          <div className="flex">
-            {["desktop", "mobile"].map((key) => {
-              const chart = key as keyof typeof chartConfig;
-              return (
-                <button
-                  key={chart}
-                  data-active={activeChart === chart}
-                  className="data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
-                  onClick={() => setActiveChart(chart)}
-                >
-                  <span className="text-muted-foreground text-xs">
-                    {chartConfig[chart].label}
-                  </span>
-                  <span className="text-lg leading-none font-bold sm:text-3xl">
-                    {visibleData
-                      .reduce((acc, curr) => acc + curr[chart], 0)
-                      .toLocaleString()}
-                  </span>
-                </button>
-              );
-            })}
+            <CardTitle className="pt-3">Electrical Signals</CardTitle>
+            <CardDescription className="pb-1">Real-time feed (auto zoom out)</CardDescription>
           </div>
         </CardHeader>
         <CardContent className="px-2 sm:p-6">
-          <ChartContainer
-            config={chartConfig}
-            className="aspect-auto h-[250px] w-full"
-          >
-            <LineChart
-              accessibilityLayer
-              data={visibleData}
-              margin={{ left: 12, right: 12 }}
-            >
+          <ChartContainer config={chartConfig} className="w-full h-[300px]">
+            <LineChart data={visibleData} margin={{ top: 12, right: 15, left: 12, bottom: 30 }}>
               <CartesianGrid vertical={false} />
               <XAxis
                 dataKey="timestamp"
@@ -142,34 +148,27 @@ export function Analysis() {
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={20}
-                // show seconds
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return date.toLocaleTimeString("en-US", {
-                    minute: "2-digit",
-                    second: "2-digit",
-                  });
-                }}
+                label={{ value: "Time (s)", position: "bottom", offset: 15 }}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                label={{ value: "Δ Voltage Difference (mV)", angle: -90, position: "insideLeft", dy: 55, offset: -5 }}
               />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
                     className="w-[150px]"
-                    nameKey="views"
-                    labelFormatter={(value) =>
-                      new Date(value).toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
-                      })
-                    }
+                    nameKey="signal"
+                    labelFormatter={v => `Time: ${Number(v).toFixed(2)} s`}
                   />
                 }
               />
               <Line
-                dataKey={activeChart}
+                dataKey="signal"
                 type="monotone"
-                stroke={`var(--color-${activeChart})`}
+                stroke="var(--chart-1)"
                 strokeWidth={2}
                 dot={false}
                 isAnimationActive={false}
@@ -178,13 +177,122 @@ export function Analysis() {
           </ChartContainer>
         </CardContent>
       </Card>
-      <div className="flex">
-        <div className="flex flex-col items-center justify-center p-10">
-          <MushroomSprite species="flyAgaric" size={300} duration={2.2} />
-          {/* <MushroomSprite species="shiitake" size={160} duration={2.2} />
-        <MushroomSprite species="oyster" size={160} duration={2.2} /> */}
+
+      {/* Voronoi network card */}
+      <Card className="p-4 sm:p-6 flex flex-col gap-4">
+        <div>
+          <CardTitle>Network Diagram</CardTitle>
+          <CardDescription className="pt-1">
+            Real-time visualization of mushroom electrical activity patterns
+          </CardDescription>
         </div>
-        <MushroomNetwork />
+
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Voronoi chart */}
+          <div className="flex-[3] rounded-2xl overflow-hidden shadow-md border border-gray-300/50 max-h-[600px]">
+            <svg
+              ref={svgRef}
+              viewBox="0 0 800 600"
+              preserveAspectRatio="xMidYMid meet"
+              className="w-full h-auto"
+            ></svg>
+          </div>
+
+          {/* Metrics panel */}
+          <div className="flex-[1] flex flex-col gap-4 justify-center">
+            <h2 className="text-lg font-semibold text-center">Metrics</h2>
+            <div className="mx-auto h-px w-3/4 bg-[#564930]"></div>
+
+            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
+              <CardTitle className="text-sm font-semibold">Rate of Change</CardTitle>
+              <CardContent className="text-lg font-bold p-0 flex flex-col items-center">
+                <span>{mappedSpeeds[currentIndex]?.toFixed(3) ?? "-"}</span>
+                {currentIndex > 0 && mappedSpeeds[currentIndex - 1] !== undefined && (
+                  <span className="text-sm text-gray-500">
+                    {mappedSpeeds[currentIndex] - mappedSpeeds[currentIndex - 1] >= 0 ? "+" : ""}
+                    {(mappedSpeeds[currentIndex] - mappedSpeeds[currentIndex - 1]).toFixed(3)}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
+              <CardTitle className="text-sm font-semibold">Baseline Drift</CardTitle>
+              <CardContent className="text-lg font-bold p-0 items-center flex flex-col">
+                {normalizedBaseline[currentIndex]?.toFixed(3) ?? "-"}
+              </CardContent>
+            </Card>
+
+            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
+              <CardTitle className="text-sm font-semibold">Spike Detected</CardTitle>
+              <CardContent className="text-lg font-bold p-0 items-center flex flex-col">
+                {spikes[currentIndex] === 1 ? "Yes" : "No"}
+              </CardContent>
+            </Card>
+
+            {/* Horizontal Mushroom Sprites */}
+            <div className="flex gap-5 mt-2 justify-center">
+              <MushroomSprite species="flyAgaric" size={40} duration={1.5} />
+              <MushroomSprite species="shiitake" size={40} duration={1.5} />
+              <MushroomSprite species="oyster" size={40} duration={1.5} />
+              <MushroomSprite species="flyAgaric" size={40} duration={1.5} />
+            </div>
+          </div>
+        </div>
+      </Card>
+            {/* Legend Accordion */}
+      <div className="mt-4 w-full">
+        <div
+          onClick={() => setLegendOpen(!legendOpen)}
+          className="cursor-pointer bg-[#564930] text-white rounded-md p-2 font-semibold flex justify-between items-center"
+        >
+          Legend
+          <span
+            className={`ml-2 inline-block transform transition-transform duration-300 ${
+              legendOpen ? "rotate-90" : ""
+            }`}
+          >
+            &#9654;
+          </span>
+        </div>
+
+        <div
+  ref={contentRef}
+  className="overflow-hidden transition-all duration-500 ease-in-out mt-2"
+  style={{ height: legendOpen ? `${contentRef.current?.scrollHeight}px` : "0px" }}
+>
+  <ul className="text-sm text-white bg-[#564930] rounded-md p-2">
+    <li className="flex flex-col gap-1 p-2 rounded-md">
+      <span className="font-semibold">Background = Baseline Drift</span>
+      <span className="text-xs">
+        The background color shows the mushroom’s baseline electrical signals, calculated as a moving average. 
+        A cooler tone background indicates lower average activity, while warmer indicates higher average activity, 
+        highlighting increased electrical activity and overall 'excitability' in the mushroom.
+      </span>
+    </li>
+    <li className="flex flex-col gap-1 p-2 rounded-md">
+      <span className="font-semibold">Ripples = Rate of Change</span>
+      <span className="text-xs">
+        Ripples along the network lines represent changes in the mushroom’s electrical signals over time. Faster-moving ripples indicate greater fluctuations in signal magnitude, 
+        highlighting moments of heightened activity in the network, which can indicate potential responses to stimuli. Slow ripples depict small 
+        differences in rate of change between consecutive dataset points, which may indicate the network is relatively stable.
+      </span>
+    </li>
+    <li className="flex flex-col gap-1 p-2 rounded-md">
+      <span className="font-semibold">Ripple Colors</span>
+      <div className="flex gap-4 text-xs">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 bg-teal-400 rounded-full"></span>
+          Teal — normal fluctuations.
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 bg-yellow-400 rounded-full"></span>
+          Gold — strong spike, unusual activity.
+        </span>
+      </div>
+    </li>
+  </ul>
+</div>
       </div>
     </>
   );
