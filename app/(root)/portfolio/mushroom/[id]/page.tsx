@@ -13,7 +13,7 @@ type Props = { params: { id: string } };
 export default function Page({ params }: Props) {
   const [activeTab, setActiveTab] = useState("overview");
   const { id } = params;
-  
+
   return (
     <div className="wrapper p-4">
       <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -47,10 +47,10 @@ export default function Page({ params }: Props) {
           <Chart id={id} />
         </TabsContent>
         <TabsContent value="network">
-          <MushroomNetwork id={id} />
+          <MushroomNetwork />
         </TabsContent>
         <TabsContent value="analysis">
-          <Analysis id={id} />
+          <Analysis />
         </TabsContent>
       </Tabs>
     </div>
