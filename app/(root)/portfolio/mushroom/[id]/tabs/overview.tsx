@@ -17,7 +17,7 @@ export default function Overview() {
     <><div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
       {/* Left side (65%) */}
       <div>
-        <ChartLineInteractive mushId={1} />
+        <ChartLineInteractive mushId={mushId} />
       </div>
 
       {/* Right side (35%) */}
