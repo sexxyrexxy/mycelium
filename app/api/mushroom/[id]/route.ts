@@ -63,7 +63,6 @@ export async function GET(
         FROM \`mycelium-470904.MushroomData1.Mushroom_Signal\`
         WHERE Mush_ID = @mushId
         ORDER BY Timestamp ASC
-        LIMIT 1000
       `,
       params: { mushId },
     });

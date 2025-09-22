@@ -2,21 +2,29 @@ import { ChartLineInteractive } from "@/components/portfolio/summaryLineChart";
 import {SonificationPanel} from "@/components/portfolio/SonificationPanel"; 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MushroomGarden, MushroomSprite } from "@/components/portfolio/PixelMushrooms";
-import React from "react";
+import { useParams } from "next/navigation";
+import React, { useMemo } from "react";
 
 export default function Overview() {
+  const { id } = useParams<{ id: string }>();
+
+  const mushId = useMemo(() => {
+    const n = Number(id);
+    return Number.isFinite(n) && n > 0 ? n : 1; // safe fallback
+  }, [id]);
+
   return (
     <><div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
       {/* Left side (65%) */}
       <div>
-        <ChartLineInteractive />
+        <ChartLineInteractive mushId={mushId} />
       </div>
 
       {/* Right side (35%) */}
       <div className="flex flex-col gap-1">
         <Card>
           <CardHeader>
-            <CardTitle>Mushroom Details:</CardTitle>
+            <CardTitle>Mushroom #{id} Details:</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <p>
