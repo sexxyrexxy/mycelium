@@ -14,21 +14,24 @@ function toTime(x: string | number): Time {
   // HH:MM:SS(.ms)
   const m = s.match(/^(\d+):(\d{2}):(\d{2})(?:\.\d+)?$/);
   if (m) {
-    const h = +m[1], mm = +m[2], ss = +m[3];
+    const h = +m[1],
+      mm = +m[2],
+      ss = +m[3];
     return (h * 3600 + mm * 60 + ss) as unknown as Time;
   }
 
   // numeric seconds or ms
   const n = Number(s);
   if (Number.isFinite(n)) {
-    return (n >= 1e11 ? Math.floor(n / 1000) : Math.floor(n)) as unknown as Time;
+    return (n >= 1e11
+      ? Math.floor(n / 1000)
+      : Math.floor(n)) as unknown as Time;
   }
 
   // ISO date
   const ts = Date.parse(s);
   return Math.floor((Number.isNaN(ts) ? 0 : ts) / 1000) as unknown as Time;
 }
-
 
 export default function VisualizationPage({ id }: { id: string }) {
   const [data, setData] = useState<Point[]>([]);
@@ -49,7 +52,10 @@ export default function VisualizationPage({ id }: { id: string }) {
 
         if (Array.isArray(json?.signals)) {
           points = json.signals
-            .map((s: any) => ({ time: toTime(s.timestamp), value: Number(s.signal) }))
+            .map((s: any) => ({
+              time: toTime(s.timestamp),
+              value: Number(s.signal),
+            }))
             .filter((p: Point) => Number.isFinite(p.value));
         } else if (Array.isArray(json)) {
           // some older routes return rows directly
@@ -71,7 +77,13 @@ export default function VisualizationPage({ id }: { id: string }) {
         // (SimpleChart sorts internally, but sorting here is fine too)
         points.sort((a, b) => Number(a.time) - Number(b.time));
 
-        console.log("[page] fetched points:", points.length, "sample:", points[0], points.at(-1));
+        console.log(
+          "[page] fetched points:",
+          points.length,
+          "sample:",
+          points[0],
+          points.at(-1)
+        );
         setData(points);
       } catch (e) {
         console.error("API fetch/parse error:", e);

@@ -1,75 +1,127 @@
-// app/api/mushrooms/route.ts
+// app/api/mushroom/upload/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { BigQuery } from "@google-cloud/bigquery";
+import os from "os";
+import path from "path";
+import fs from "fs/promises";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import { Firestore, QueryDocumentSnapshot } from "@google-cloud/firestore";
-import { readFileSync } from "fs";
-import path from "path";
+// ---- CONFIG ----
+const PROJECT_ID = "mycelium-470904";
+const DATASET_ID = "MushroomData";            // <- adjust if yours differs
+const DETAILS_TABLE = "Mushroom_Details";      // columns: MushID STRING, UserID STRING, ImageUrl STRING, Name STRING, Mushroom_Kind STRING, Description STRING, CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+const SIGNALS_TABLE = "Mushroom_Signal";       // columns: MushID STRING, Timestamp TIMESTAMP, Signal_mV FLOAT64
+const LOCATION = "australia-southeast1";
+const KEY_FILE = "mycelium-470904-5621723dfeff.json";
 
-type MushroomMeta = {
-  mushId: number;
-  name: string;
-  kind?: string;
-  bio?: string;
-  imageUrl?: string;
-  spawnDate?: any; // Firestore Timestamp
-  [k: string]: any;
-};
+const STAGING_SCHEMA = {
+  fields: [
+    { name: "Timestamp", type: "TIMESTAMP" },
+    { name: "Signal_mV", type: "FLOAT" },
+  ],
+} as const;
 
-// --- Firestore (Firebase project) ---
-const FIREBASE_PROJECT_ID = "mycelium-29d2c";
+export async function POST(req: NextRequest) {
+  let tmpPath: string | null = null;
+  let stagingId: string | null = null;
 
-// Prefer ENV in prod; for local dev read the file you added to the repo (but DON'T commit it!)
-const KEYFILE_PATH = path.join(
-  process.cwd(),
-  "mycelium-29d2c-firebase-adminsdk-fbsvc-237030bd4f.json"
-);
-
-const svcKey =
-  process.env.FIRESTORE_CREDENTIALS_JSON
-    ? JSON.parse(process.env.FIRESTORE_CREDENTIALS_JSON)
-    : JSON.parse(readFileSync(KEYFILE_PATH, "utf8"));
-
-const firestore =
-  (global as any)._fs ??
-  new Firestore({
-    projectId: svcKey.project_id || FIREBASE_PROJECT_ID,
-    credentials: {
-      client_email: svcKey.client_email,
-      private_key: svcKey.private_key,
-    },
-  });
-(global as any)._fs = firestore;
-
-export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url);
-    const mushIdParam = searchParams.get("mushId");
-    const col = firestore.collection("mushrooms");
+    // 1) Parse multipart form
+    const form = await req.formData();
+    const file = form.get("file") as File | null;
+    if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
 
-    const snap =
-      mushIdParam != null
-        ? await col.where("mushId", "==", Number(mushIdParam)).get()
-        : await col.get();
+    const name = (form.get("name") ?? "").toString().trim();
+    const description = (form.get("description") ?? "").toString().trim();
+    const kind = (form.get("kind") ?? "").toString().trim();
+    const userId = (form.get("userId") ?? "").toString().trim();
 
-    const items: MushroomMeta[] = [];
-    snap.forEach((doc: QueryDocumentSnapshot) => {
-      const d = doc.data() as MushroomMeta;
-      const out: any = { id: doc.id, ...d };
-      if (out.spawnDate?.toDate) out.spawnDate = out.spawnDate.toDate().toISOString();
-      items.push(out);
+    if (!userId || !name || !kind) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // 2) Save CSV temp file
+    tmpPath = path.join(os.tmpdir(), `${Date.now()}-${file.name}`);
+    const buf = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(tmpPath, buf);
+
+    // 3) BigQuery client
+    const bq = new BigQuery({ projectId: PROJECT_ID, keyFilename: KEY_FILE, location: LOCATION });
+
+    // 4) Insert details row and get mushId
+    const detailsScript = `
+      DECLARE new_id STRING;
+      SET new_id = GENERATE_UUID();
+
+      INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.${DETAILS_TABLE}\`
+        (MushID, UserID, Name, Description, Mushroom_Kind)
+      VALUES
+        (new_id, @userId, @name, @description, @kind);
+
+      SELECT new_id AS mushid;
+    `;
+
+    const [detailRows] = await bq.query({
+      query: detailsScript,
+      location: LOCATION,
+      params: { userId, name, description, kind },
     });
 
-    if (mushIdParam != null) {
-      return NextResponse.json(items[0] ?? null);
-    }
-    return NextResponse.json(items);
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json(
-      { error: "Failed to fetch mushrooms" },
-      { status: 500 }
-    );
+    const mushId = (detailRows?.[0] as any)?.mushid as string | undefined;
+    if (!mushId) throw new Error("Failed to obtain MushID");
+
+    // 5) Create staging table
+    stagingId = `stg_${mushId.replace(/-/g, "")}`;
+    await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true }).catch(() => {});
+
+    // 6) Load CSV into staging (await ensures load completes)
+    await bq.dataset(DATASET_ID).table(stagingId).load(tmpPath, {
+      schema: STAGING_SCHEMA as any,
+      sourceFormat: "CSV",
+      skipLeadingRows: 1,
+      writeDisposition: "WRITE_TRUNCATE",
+    });
+
+    // 7) Insert staging rows into permanent signals table
+    await bq.query({
+      query: `
+        INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.${SIGNALS_TABLE}\` (MushID, Timestamp, Signal_mV)
+        SELECT @mushId AS MushID, Timestamp, Signal_mV
+        FROM \`${PROJECT_ID}.${DATASET_ID}.${stagingId}\`
+      `,
+      location: LOCATION,
+      params: { mushId },
+    });
+
+    // 8) Count inserted rows
+    const [countRows] = await bq.query({
+      query: `SELECT COUNT(*) AS cnt FROM \`${PROJECT_ID}.${DATASET_ID}.${stagingId}\``,
+      location: LOCATION,
+    });
+    const outputRows = Number((countRows?.[0] as any)?.cnt ?? 0);
+
+    // 9) Cleanup
+    await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true });
+    stagingId = null;
+    await fs.unlink(tmpPath);
+    tmpPath = null;
+
+    // 10) Response
+    return NextResponse.json({ status: "ok", mushId, insertedSignals: outputRows });
+  } catch (err: any) {
+    // Best-effort cleanup
+    try {
+      if (stagingId) {
+        const bq = new BigQuery({ projectId: PROJECT_ID, keyFilename: KEY_FILE, location: LOCATION });
+        await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true });
+      }
+    } catch {}
+    try {
+      if (tmpPath) await fs.unlink(tmpPath);
+    } catch {}
+
+    return NextResponse.json({ error: err?.message ?? "Upload failed" }, { status: 500 });
   }
 }
