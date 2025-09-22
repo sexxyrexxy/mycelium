@@ -93,7 +93,7 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
 
   // fixed windows
   const AMP_WINDOW_SEC = 60;
-  const ROC_WINDOW_SEC = 2;
+  const ROC_WINDOW_SEC = 60;
 
   // toggles
   const [showAmp, setShowAmp] = useState(true);

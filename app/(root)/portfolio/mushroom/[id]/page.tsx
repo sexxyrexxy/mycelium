@@ -1,4 +1,6 @@
 "use client";
+
+import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard,
@@ -7,14 +9,15 @@ import {
   Search,
   Layers,
 } from "lucide-react";
-import React, { useState } from "react";
 import Overview from "./tabs/overview";
 import Chart from "./tabs/chart";
 import MushroomNetwork from "./tabs/network";
 import { Analysis } from "./tabs/analysis";
+import { useParams } from "next/navigation";
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview");
+  const { id } = useParams<{ id: string }>();
 
   return (
     <div className="wrapper p-4">
@@ -51,7 +54,15 @@ export default function Page() {
             className="flex items-center justify-center gap-2"
           >
             <Search className="h-4 w-4" />
-            <span className="hidden md:inline">Real-Time Analysis</span>
+            <span className="hidden md:inline">Analysis</span>
+          </TabsTrigger>
+          <TabsTrigger
+            value="similar"
+            className="flex items-center justify-center gap-2"
+            disabled
+          >
+            <Layers className="h-4 w-4" />
+            <span className="hidden md:inline">Similar</span>
           </TabsTrigger>
         </TabsList>
 
@@ -59,7 +70,7 @@ export default function Page() {
           <Overview />
         </TabsContent>
         <TabsContent value="chart">
-          <Chart />
+          <Chart id={id} />
         </TabsContent>
         <TabsContent value="network">
           <MushroomNetwork />
