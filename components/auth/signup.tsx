@@ -35,7 +35,7 @@ const SignUp: React.FC = () => {
   // If already signed in, skip sign-up
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) router.replace("/dashboard");
+      if (u) router.replace("/auth");
     });
     return unsub;
   }, [router]);
