@@ -125,3 +125,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err?.message ?? "Upload failed" }, { status: 500 });
   }
 }
+
+export async function GET(_req: NextRequest) {
+  try {
+    const bq = new BigQuery({
+      projectId: PROJECT_ID,
+      keyFilename: KEY_FILE,
+      location: LOCATION,
+    });
+
+    const query = `
+      SELECT 
+        MushID, 
+        Name, 
+        Description, 
+        Mushroom_Kind, 
+        UserID
+      FROM \`${PROJECT_ID}.${DATASET_ID}.${DETAILS_TABLE}\`
+      
+    `;
+
+    const [rows] = await bq.query({ query, location: LOCATION });
+    return NextResponse.json(rows);
+  } catch (err: any) {
+    console.error("GET mushrooms failed:", err);
+    return NextResponse.json(
+      { error: err?.message ?? "Failed to fetch mushrooms" },
+      { status: 500 }
+    );
+  }
+}
