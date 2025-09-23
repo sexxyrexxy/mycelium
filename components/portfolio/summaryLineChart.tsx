@@ -18,7 +18,7 @@ import {
 
 type ApiSignal = { timestamp: string; signal: number | null };
 type ApiResponse =
-  | { mushId: number; signals: ApiSignal[] }
+  | { mushId: string; signals: ApiSignal[] }
   | { id: string; signals: ApiSignal[]; [k: string]: any };
 
 const chartConfig = {
@@ -28,24 +28,27 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
+export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
   // Hooks FIRST
-  const [chartData, setChartData] = useState<{ date: string; signal: number }[]>(
-    []
-  );
+  const [chartData, setChartData] = useState<
+    { date: string; signal: number }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/mushroom/${mushId}`, { cache: "no-store" });
+        const res = await fetch(`/api/mushroom/${mushId}`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(`API ${res.status}`);
 
         const payload: ApiResponse = await res.json();
         const signals = (payload as any).signals;
 
-        if (!Array.isArray(signals)) throw new Error("API payload has no 'signals' array");
+        if (!Array.isArray(signals))
+          throw new Error("API payload has no 'signals' array");
 
         const data = signals
           .filter((s: ApiSignal) => s && s.timestamp && s.signal != null)
@@ -77,15 +80,27 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
 
   const total = Math.round(chartData.reduce((acc, cur) => acc + cur.signal, 0));
 
-  // activity interpretation 
+  // activity interpretation
   const interpret = (value: number | null, average: number | null) => {
     if (value == null || average == null) return null;
     const tol = Math.max(5, average * 0.08); // 8% band or 5 mV minimum
     if (value > average + tol)
-      return { title: "High Activity 🌟", text: "Likely growth or a lively response", tone: "text-green-600" };
+      return {
+        title: "High Activity 🌟",
+        text: "Likely growth or a lively response",
+        tone: "text-green-600",
+      };
     if (value < average - tol)
-      return { title: "Low Activity 💤", text: "Resting or conserving energy", tone: "text-gray-600" };
-    return { title: "Stable Activity 🧘", text: "Conditions look balanced", tone: "text-amber-600" };
+      return {
+        title: "Low Activity 💤",
+        text: "Resting or conserving energy",
+        tone: "text-gray-600",
+      };
+    return {
+      title: "Stable Activity 🧘",
+      text: "Conditions look balanced",
+      tone: "text-amber-600",
+    };
   };
 
   // Fully custom tooltip panel (no ChartTooltipContent, so children render correctly)
@@ -93,8 +108,9 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
     if (!active || !payload || !payload.length) return null;
 
     const point = payload[0];
-    const value = typeof point?.value === "number" ? (point.value as number) : null; //extracts signal from a point, if not a number return null
-    const info = interpret(value, avg); 
+    const value =
+      typeof point?.value === "number" ? (point.value as number) : null; //extracts signal from a point, if not a number return null
+    const info = interpret(value, avg);
 
     return (
       <div className="rounded-md border bg-background p-2 shadow-sm w-[220px]">
@@ -122,7 +138,9 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
         {/* Interpretation */}
         {info && (
           <div className="mt-2">
-            <div className={`text-xs font-semibold ${info.tone}`}>{info.title}</div>
+            <div className={`text-xs font-semibold ${info.tone}`}>
+              {info.title}
+            </div>
             <div className="text-xs text-muted-foreground">{info.text}</div>
           </div>
         )}
@@ -146,7 +164,9 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
         </div>
         <div className="flex items-center border-t sm:border-t-0 sm:border-l px-6 py-4 sm:px-8 sm:py-6">
           <div>
-            <span className="text-muted-foreground block text-xs">Total (mV)</span>
+            <span className="text-muted-foreground block text-xs">
+              Total (mV)
+            </span>
             <span className="text-lg leading-none font-bold sm:text-3xl">
               {total.toLocaleString()}
             </span>
@@ -155,7 +175,10 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
       </CardHeader>
 
       <CardContent className="px-2 sm:p-6">
-        <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-auto h-[250px] w-full"
+        >
           <LineChart data={chartData} margin={{ left: 12, right: 12 }}>
             <CartesianGrid vertical={false} />
             <XAxis
