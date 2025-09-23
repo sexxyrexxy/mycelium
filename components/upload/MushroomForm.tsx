@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,9 @@ export default function MushroomForm() {
     csvFile: null as File | null,
   });
 
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+
   const handleCSVChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === "text/csv") {
@@ -29,9 +34,42 @@ export default function MushroomForm() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Form submitted:", formData);
+    if (!formData.csvFile || !formData.name || !formData.mushroomKind) {
+      alert("Please fill out all fields and upload a CSV.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const body = new FormData();
+      body.append("file", formData.csvFile);
+      body.append("name", formData.name);
+      body.append("description", formData.description);
+      body.append("kind", formData.mushroomKind);
+      body.append("userId", "demo-user-123"); // 🔑 replace with real userId / auth later
+
+      const res = await fetch("/api/mushrooms/", {
+        method: "POST",
+        body,
+      });
+
+      const json = await res.json();
+      setResult(json);
+
+      if (!res.ok) {
+        alert("Upload failed: " + json.error);
+      } else {
+        alert("Mushroom uploaded successfully!");
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Unexpected error: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,31 +79,34 @@ export default function MushroomForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
+          {/* Name */}
+          <div className="flex flex-col space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              placeholder="Enter mushroom name"
               value={formData.name}
               onChange={(e) =>
                 setFormData({ ...formData, name: e.target.value })
               }
+              required
             />
           </div>
 
-          <div>
+          {/* Description */}
+          <div className="flex flex-col space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              placeholder="Write a description"
               value={formData.description}
               onChange={(e) =>
                 setFormData({ ...formData, description: e.target.value })
               }
+              required
             />
           </div>
 
-          <div>
+          {/* Kind */}
+          <div className="flex flex-col space-y-2">
             <Label htmlFor="mushroomKind">Mushroom Kind</Label>
             <Select
               onValueChange={(value) =>
@@ -76,30 +117,37 @@ export default function MushroomForm() {
                 <SelectValue placeholder="Select kind" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="All">All</SelectItem>
                 <SelectItem value="Oyster">Oyster</SelectItem>
                 <SelectItem value="Shiitake">Shiitake</SelectItem>
-                <SelectItem value="King Stropharia">King Stropharia</SelectItem>
                 <SelectItem value="Enokitake">Enokitake</SelectItem>
                 <SelectItem value="King Oyster">King Oyster</SelectItem>
-                <SelectItem value="Turkey Tail">Turkey Tail</SelectItem>
-                <SelectItem value="Wood Blewit">Wood Blewit</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div>
+          {/* CSV */}
+          <div className="flex flex-col space-y-2">
             <Label htmlFor="csvUpload">Upload CSV File</Label>
             <Input
               id="csvUpload"
               type="file"
               accept=".csv"
               onChange={handleCSVChange}
+              required
             />
           </div>
 
-          <Button type="submit">Submit</Button>
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Uploading..." : "Submit"}
+          </Button>
         </form>
+
+        {/* Debug Output */}
+        {result && (
+          <pre className="mt-6 p-4 bg-gray-100 text-sm rounded">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        )}
       </CardContent>
     </Card>
   );

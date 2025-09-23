@@ -1,4 +1,6 @@
 "use client";
+
+import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard,
@@ -7,14 +9,15 @@ import {
   Search,
   Layers,
 } from "lucide-react";
-import React, { useState } from "react";
 import Overview from "./tabs/overview";
 import Chart from "./tabs/chart";
 import MushroomNetwork from "./tabs/network";
 import { Analysis } from "./tabs/analysis";
+import { useParams } from "next/navigation";
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview");
+  const { id } = useParams<{ id: string }>();
 
   return (
     <div className="wrapper p-4">
@@ -24,7 +27,7 @@ export default function Page() {
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-5 gap-2 mb-6 w-full">
+        <TabsList className="grid grid-cols-3 gap-2 mb-6 w-full">
           <TabsTrigger
             value="overview"
             className="flex items-center justify-center gap-2"
@@ -32,13 +35,13 @@ export default function Page() {
             <LayoutDashboard className="h-4 w-4" />
             <span className="hidden md:inline">Overview</span>
           </TabsTrigger>
-          <TabsTrigger
+          {/* <TabsTrigger
             value="chart"
             className="flex items-center justify-center gap-2"
           >
             <BarChart3 className="h-4 w-4" />
             <span className="hidden md:inline">Chart</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger
             value="network"
             className="flex items-center justify-center gap-2"
@@ -56,6 +59,7 @@ export default function Page() {
           <TabsTrigger
             value="similar"
             className="flex items-center justify-center gap-2"
+            disabled
           >
             <Layers className="h-4 w-4" />
             <span className="hidden md:inline">Similar</span>
@@ -66,7 +70,7 @@ export default function Page() {
           <Overview />
         </TabsContent>
         <TabsContent value="chart">
-          <Chart />
+          <Chart id={id} />
         </TabsContent>
         <TabsContent value="network">
           <MushroomNetwork />

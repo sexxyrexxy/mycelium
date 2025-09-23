@@ -6,7 +6,8 @@ export function drawVoronoiChart(
   height = 600,
   mappedSpeeds: number[] = [],
   normalizedBaseline: number[] = [],
-  spikes: number[] = []
+  spikes: number[] = [],
+  realTime: boolean = false
 ) {
   const svg = d3.select(svgElement);
   svg.selectAll("*").remove();
@@ -36,7 +37,6 @@ export function drawVoronoiChart(
       const start = v as [number, number];
       const end = vertices[(i + 1) % vertices.length] as [number, number];
 
-      // Base black line
       const baseLine = svg
         .append("line")
         .attr("x1", start[0])
@@ -46,7 +46,6 @@ export function drawVoronoiChart(
         .attr("stroke", "black")
         .attr("stroke-width", 1.5);
 
-      // Pulse line (initially invisible)
       const pulseLine = svg
         .append("line")
         .attr("x1", start[0])
@@ -62,37 +61,57 @@ export function drawVoronoiChart(
   }
 
   const spikeColor = d3.interpolateRgb("teal", "gold");
+
   let t = 0;
   let speedIndex = 0;
+  let currentSpeed = 0.02;
 
+  // --- Real-time speed updates once per second ---
+  let speedTimer: NodeJS.Timeout | null = null;
+  if (realTime) {
+    speedTimer = setInterval(() => {
+      if (mappedSpeeds.length > 0) {
+        currentSpeed = mappedSpeeds[speedIndex % mappedSpeeds.length];
+        speedIndex++;
+      }
+    }, 1000);
+  }
+
+  // --- Animation loop ---
   const timer = d3.timer(() => {
     if (mappedSpeeds.length === 0 || normalizedBaseline.length === 0) return;
 
-    const currentSpeed = mappedSpeeds[speedIndex % mappedSpeeds.length];
-    t += currentSpeed;
-    speedIndex++;
+    if (!realTime) {
+      // default mode: update speed every tick
+      currentSpeed = mappedSpeeds[speedIndex % mappedSpeeds.length];
+      speedIndex++;
+    }
 
-    // Update background
+    t += currentSpeed;
+
+    // Background based on baseline
     const baselineVal = normalizedBaseline[speedIndex % normalizedBaseline.length];
     svg.style("background-color", d3.interpolateRdYlBu(1 - baselineVal));
 
+    // Update edges
     edges.forEach((e, i) => {
       if (!e.pulseLine || e.pulseLine.empty()) return;
 
       const phase = i * 0.1;
-      const pulse = (Math.sin(t + phase) + 1) / 2; // 0 → 1
+      const pulse = (Math.sin(t + phase) + 1) / 2;
       const spikeVal = spikes[i % spikes.length] ?? 0;
       const color = spikeColor(spikeVal);
 
       e.pulseLine
         .attr("stroke", color)
         .attr("stroke-width", 1 + pulse * 3)
-        .attr("stroke-opacity", pulse); // glow effect
+        .attr("stroke-opacity", pulse);
     });
   });
 
   return () => {
     timer.stop();
+    if (speedTimer) clearInterval(speedTimer);
     svg.selectAll("*").remove();
   };
 }

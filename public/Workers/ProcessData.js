@@ -32,7 +32,7 @@ self.onmessage = (event) => {
   }
 
   const MIN_SPEED = 0.001;
-  const MAX_SPEED = 0.1;
+  const MAX_SPEED = 0.2;
 
   const mappedSpeeds = rates.map(rate =>
     ((rate - minRate) / (maxRate - minRate)) * (MAX_SPEED - MIN_SPEED) + MIN_SPEED
