@@ -67,10 +67,11 @@ export default function Page() {
         </TabsList>
 
         <TabsContent value="overview">
+
           <Overview />
         </TabsContent>
         <TabsContent value="chart">
-          <Chart id={id} />
+          <Chart/>
         </TabsContent>
         <TabsContent value="network">
           <MushroomNetwork />
