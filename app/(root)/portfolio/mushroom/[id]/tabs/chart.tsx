@@ -8,4 +8,5 @@ export default function Chart() {
   const mushId = id; 
 
   return <RealTimeChart mushId={mushId} height={420} />;
+
 }
