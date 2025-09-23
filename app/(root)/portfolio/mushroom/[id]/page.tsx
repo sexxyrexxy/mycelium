@@ -41,10 +41,10 @@ export default function Page({ params }: Props) {
         </TabsList>
 
         <TabsContent value="overview">
-          <Overview id={id}/>
+          <Overview/>
         </TabsContent>
         <TabsContent value="chart">
-          <Chart id={id} />
+          <Chart/>
         </TabsContent>
         <TabsContent value="network">
           <MushroomNetwork />
