@@ -27,6 +27,7 @@ export default function Overview() {
         const payload = await res.json();
         const signals: Array<{ timestamp: string; signal: number | null }> =
           payload?.signals ?? [];
+
         const vals = signals
           .filter((s) => s && s.timestamp && s.signal != null)
           .map((s) => Number(s.signal))
@@ -48,7 +49,38 @@ export default function Overview() {
       cancelled = true;
     };
   }, [id]);
-      
+
+
+  // --- Small internal component for the 5-segment level bar ---
+  function SegBar({ level, filledClass, label }: { level: number; filledClass: string; label: string }) {
+    return (
+      <div aria-label={`${label} level ${level} out of 5`} className="flex gap-1 mt-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-2 w-8 rounded ${i < level ? filledClass : "bg-gray-200"}`}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // --- Helper for status chip styling by level ---
+  function levelChip(level: number) {
+    if (level >= 4) return { text: "High", cls: "bg-green-100 text-green-700" };
+    if (level === 3) return { text: "Medium", cls: "bg-amber-100 text-amber-700" };
+    return { text: "Low", cls: "bg-gray-100 text-gray-700" };
+  }
+
+  // Hardcoded demo levels
+  const nutrientLevel = 4; // High
+  const humidityLevel = 3; // Medium
+  const lightLevel = 2;    // Low
+
+  const nutrientChip = levelChip(nutrientLevel);
+  const humidityChip = levelChip(humidityLevel);
+  const lightChip = levelChip(lightLevel);
+
   return (
     <>
       {/* Friendly header intro */}
@@ -71,6 +103,67 @@ export default function Overview() {
         {/* Left side (65%) */}
         <div>
           <ChartLineInteractive mushId={id} />
+
+          {/* NEW: Care panel directly below the chart */}
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle>Your Mushroom's Needs</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Nutrients */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium flex items-center gap-2">
+                    🍄 Nutrients
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${nutrientChip.cls}`}>
+                    {nutrientChip.text} • {nutrientLevel}/5
+                  </span>
+                </div>
+                <SegBar level={nutrientLevel} filledClass="bg-emerald-500" label="Nutrients" />
+                <p className="text-xs text-gray-600 mt-2">
+                  Tip: Mix in fresh substrate or supplement with spent coffee grounds or bran for a gentle boost.
+                </p>
+              </div>
+
+              {/* Humidity */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium flex items-center gap-2">
+                    💧 Humidity
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${humidityChip.cls}`}>
+                    {humidityChip.text} • {humidityLevel}/5
+                  </span>
+                </div>
+                <SegBar level={humidityLevel} filledClass="bg-sky-500" label="Humidity" />
+                <p className="text-xs text-gray-600 mt-2">
+                  Tip: Aim for 85–92% RH. Lightly mist walls (not caps) and keep airflow gentle.
+                </p>
+              </div>
+
+              {/* Light */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium flex items-center gap-2">
+                    ☀️ Light
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${lightChip.cls}`}>
+                    {lightChip.text} • {lightLevel}/5
+                  </span>
+                </div>
+                <SegBar level={lightLevel} filledClass="bg-amber-400" label="Light" />
+                <p className="text-xs text-gray-600 mt-2">
+                  Tip: Bright, indirect light is perfect. Think “north-facing window” or diffused LED.
+                </p>
+              </div>
+
+              {/* Tiny note that it's demo data */}
+              <p className="text-[10px] text-gray-400 mt-3">
+                Demo levels shown for design. Hook these to your readings later.
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Right side (35%) */}
