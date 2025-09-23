@@ -12,7 +12,7 @@ export default function Overview() {
     const n = Number(id);
     return Number.isFinite(n) && n > 0 ? n : 1; // safe fallback
   }, [id]);
-
+      
   return (
     <><div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
       {/* Left side (65%) */}

@@ -41,7 +41,7 @@ export default function Page({ params }: Props) {
         </TabsList>
 
         <TabsContent value="overview">
-          <Overview id={id} />
+          <Overview id={id}/>
         </TabsContent>
         <TabsContent value="chart">
           <Chart id={id} />
