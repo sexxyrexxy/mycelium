@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -14,7 +14,6 @@ import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@/components/ui/chart";
 
 type ApiSignal = { timestamp: string; signal: number | null };
@@ -30,7 +29,10 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
-  const [chartData, setChartData] = useState<{ date: string; signal: number }[]>([]);
+  // Hooks FIRST
+  const [chartData, setChartData] = useState<{ date: string; signal: number }[]>(
+    []
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,15 +43,15 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
         if (!res.ok) throw new Error(`API ${res.status}`);
 
         const payload: ApiResponse = await res.json();
-        const signals = (payload as any).signals; // route returns { ...meta?, signals }
+        const signals = (payload as any).signals;
 
         if (!Array.isArray(signals)) throw new Error("API payload has no 'signals' array");
 
         const data = signals
           .filter((s: ApiSignal) => s && s.timestamp && s.signal != null)
           .map((s: ApiSignal) => ({
-            date: s.timestamp,              // ISO string from your API
-            signal: Number(s.signal),       // ensure number
+            date: s.timestamp,
+            signal: Number(s.signal),
           }));
 
         setChartData(data);
@@ -61,11 +63,79 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
     })();
   }, [mushId]);
 
+  // Average for interpretation
+  const avg = useMemo(() => {
+    if (!chartData.length) return null;
+    const sum = chartData.reduce((acc, cur) => acc + cur.signal, 0);
+    return sum / chartData.length;
+  }, [chartData]);
+
+  // Early returns AFTER hooks
   if (loading) return <div className="p-6">Loading…</div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!chartData.length) return <div className="p-6">No signal data.</div>;
 
   const total = Math.round(chartData.reduce((acc, cur) => acc + cur.signal, 0));
+
+  // activity interpretation 
+  const interpret = (value: number | null, average: number | null) => {
+    if (value == null || average == null) return null;
+    const tol = Math.max(5, average * 0.08); // 8% band or 5 mV minimum
+    if (value > average + tol)
+      return { title: "High Activity 🌟", text: "Likely growth or a lively response", tone: "text-green-600" };
+    if (value < average - tol)
+      return { title: "Low Activity 💤", text: "Resting or conserving energy", tone: "text-gray-600" };
+    return { title: "Stable Activity 🧘", text: "Conditions look balanced", tone: "text-amber-600" };
+  };
+
+  // Fully custom tooltip panel (no ChartTooltipContent, so children render correctly)
+  function CustomTooltip({ active, payload, label }: any) {
+    if (!active || !payload || !payload.length) return null;
+
+    const point = payload[0];
+    const value = typeof point?.value === "number" ? (point.value as number) : null; //extracts signal from a point, if not a number return null
+    const info = interpret(value, avg); 
+
+    return (
+      <div className="rounded-md border bg-background p-2 shadow-sm w-[220px]">
+        {/* Timestamp */}
+        <div className="text-xs text-muted-foreground">
+          {label
+            ? new Date(label).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : ""}
+        </div>
+
+        {/* Value */}
+        <div className="mt-1 flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">Signal</div>
+          <div className="text-sm font-medium">
+            {value != null ? `${value.toFixed(1)} mV` : "—"}
+          </div>
+        </div>
+
+        {/* Interpretation */}
+        {info && (
+          <div className="mt-2">
+            <div className={`text-xs font-semibold ${info.tone}`}>{info.title}</div>
+            <div className="text-xs text-muted-foreground">{info.text}</div>
+          </div>
+        )}
+
+        {/* Average */}
+        {avg != null && (
+          <div className="mt-2 text-[10px] text-muted-foreground/80">
+            avg {avg.toFixed(1)} mV
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card className="py-4 sm:py-0">
@@ -95,24 +165,15 @@ export function ChartLineInteractive({ mushId = 1 }: { mushId?: number }) {
               tickMargin={8}
               minTickGap={32}
               tickFormatter={(value) =>
-                new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+                new Date(value).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
               }
             />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  className="w-[150px]"
-                  nameKey="signal"
-                  labelFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  }
-                />
-              }
-            />
+            <ChartTooltip content={<CustomTooltip />} />
             <Line
               dataKey="signal"
               type="monotone"
