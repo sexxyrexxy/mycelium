@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Page() {
     const [rows, setRows] = useState<any[]>([]);
@@ -27,8 +27,53 @@ export default function Page() {
     })();
   }, []);
 
-  if (loading) return <p className="p-4">Loading...</p>;
-  if (!rows.length) return <p className="p-4">No data found</p>;
+  if (loading)
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-6 w-64" />
+        <div className="overflow-hidden rounded-lg border">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-gray-100">
+              <tr>
+                {Array.from({ length: 5 }).map((_, idx) => (
+                  <th key={idx} className="border px-3 py-2 text-left">
+                    <Skeleton className="h-4 w-24" />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 4 }).map((_, rowIdx) => (
+                <tr key={rowIdx} className="border-t">
+                  {Array.from({ length: 5 }).map((_, colIdx) => (
+                    <td key={colIdx} className="border px-3 py-3">
+                      <Skeleton className="h-4 w-full" />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  if (error && !rows.length)
+    return (
+      <div className="p-6">
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-6 text-sm text-red-600">
+          {error}
+        </div>
+      </div>
+    );
+
+  if (!rows.length)
+    return (
+      <div className="p-6">
+        <div className="rounded-md border border-dashed border-muted-foreground/40 px-4 py-6 text-sm text-muted-foreground">
+          No data found.
+        </div>
+      </div>
+    );
 
   return (
   <div className="p-6">
