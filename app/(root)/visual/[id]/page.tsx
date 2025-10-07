@@ -1,110 +1,78 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import SimpleChart, { Point } from "@/components/portfolio/SimpleChart";
 import type { Time } from "lightweight-charts";
 import { useSearchParams } from "next/navigation";
-
-// HH:MM:SS | seconds | ms | ISO → Time
-function toTime(x: string | number): Time {
-  if (typeof x === "number" && Number.isFinite(x))
-    return Math.floor(x) as unknown as Time;
-  const s = String(x).trim();
-
-  // HH:MM:SS(.ms)
-  const m = s.match(/^(\d+):(\d{2}):(\d{2})(?:\.\d+)?$/);
-  if (m) {
-    const h = +m[1], mm = +m[2], ss = +m[3];
-    return (h * 3600 + mm * 60 + ss) as unknown as Time;
-  }
-
-  // numeric seconds or ms
-  const n = Number(s);
-  if (Number.isFinite(n)) {
-    return (n >= 1e11 ? Math.floor(n / 1000) : Math.floor(n)) as unknown as Time;
-  }
-
-  // ISO date
-  const ts = Date.parse(s);
-  return Math.floor((Number.isNaN(ts) ? 0 : ts) / 1000) as unknown as Time;
-}
-
-// (kept here but unused now)
-// Robust two-column CSV: timestamp,value (ignores blank/NaN rows)
-function parseTwoColCSV(text: string): Point[] {
-  const lines = text.replace(/\r/g, "\n").split("\n").filter(Boolean);
-  if (lines.length < 2) return [];
-  const out: Point[] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const [tRaw, vRaw] = line.split(",");
-    if (!tRaw || !vRaw) continue;
-    const t = toTime(tRaw);
-    const v = Number(String(vRaw).trim());
-    if (!Number.isFinite(v)) continue;
-    out.push({ time: t, value: v });
-  }
-  return out;
-}
+import {
+  useMushroomSignals,
+  TIMELINE_OPTIONS,
+} from "@/hooks/useMushroomSignals";
+import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2 } from "lucide-react";
 
 export default function VisualizationPage() {
-  const [data, setData] = useState<Point[]>([]);
   const search = useSearchParams();
-  const id = search.get("id") ?? "1";          // /visual?id=42 → fetch /api/mushroom/42
-  const limit = 10000;                          // tweak if you want
+  const id = search.get("id") ?? "1";
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/mushroom/${encodeURIComponent(id)}?limit=${limit}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
+  const {
+    viewData,
+    loading,
+    isRefetching,
+    pendingRange,
+    error,
+    selectedRange,
+    setSelectedRange,
+  } = useMushroomSignals(id);
 
-        // Support both shapes:
-        // A) { mushId, signals: [{ timestamp, signal }] }
-        // B) rows: [{ Timestamp: "HH:MM:SS", Signal_mV }]
-        let points: Point[] = [];
+  const chartPoints = useMemo<Point[]>(() => {
+    return viewData.map((point) => ({
+      time: Math.floor(point.ms / 1000) as unknown as Time,
+      value: point.signal,
+    }));
+  }, [viewData]);
 
-        if (Array.isArray(json?.signals)) {
-          points = json.signals
-            .map((s: any) => ({ time: toTime(s.timestamp), value: Number(s.signal) }))
-            .filter((p: Point) => Number.isFinite(p.value));
-        } else if (Array.isArray(json)) {
-          // some older routes return rows directly
-          points = json
-            .map((r: any) => ({
-              time: toTime((r?.Timestamp?.value ?? r?.Timestamp) as any),
-              value: Number(r?.Signal_mV ?? r?.value),
-            }))
-            .filter((p: Point) => Number.isFinite(p.value));
-        } else if (Array.isArray(json?.rows)) {
-          points = json.rows
-            .map((r: any) => ({
-              time: toTime((r?.Timestamp?.value ?? r?.Timestamp) as any),
-              value: Number(r?.Signal_mV ?? r?.value),
-            }))
-            .filter((p: Point) => Number.isFinite(p.value));
-        }
-
-        // (SimpleChart sorts internally, but sorting here is fine too)
-        points.sort((a, b) => Number(a.time) - Number(b.time));
-
-        console.log("[page] fetched points:", points.length, "sample:", points[0], points.at(-1));
-        setData(points);
-      } catch (e) {
-        console.error("API fetch/parse error:", e);
-        setData([]);
-      }
-    })();
-  }, [id]);
+  const rangeLabel = useMemo(
+    () => TIMELINE_OPTIONS.find((opt) => opt.id === selectedRange)?.label ?? "",
+    [selectedRange]
+  );
+  const isInitialLoading = loading && chartPoints.length === 0;
 
   return (
-    <main style={{ padding: 16 }}>
-      <h1 style={{ marginBottom: 12 }}>Mushroom Signal</h1>
-      <SimpleChart data={data} height={420} />
+    <main className="space-y-4 p-4 sm:p-6">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Mushroom Signal</h1>
+          <p className="text-sm text-muted-foreground">
+            Explore raw electrical activity with stock-style timelines. ({rangeLabel})
+            {isRefetching ? (
+              <Loader2 className="ml-1 inline size-3 animate-spin text-muted-foreground" />
+            ) : null}
+          </p>
+        </div>
+        <SignalTimeRangeSelector
+          value={selectedRange}
+          onChange={setSelectedRange}
+          pendingId={pendingRange}
+        />
+      </div>
+
+      {isInitialLoading ? (
+        <div className="h-[420px] w-full overflow-hidden rounded-xl border border-dashed border-muted-foreground/40 bg-background">
+          <Skeleton className="h-full w-full" />
+        </div>
+      ) : error ? (
+        <div className="rounded-md border bg-red-50 px-4 py-8 text-sm text-red-600">
+          {error}
+        </div>
+      ) : !chartPoints.length ? (
+        <div className="rounded-md border bg-background px-4 py-8 text-sm text-muted-foreground">
+          No signal data available for this range.
+        </div>
+      ) : (
+        <SimpleChart data={chartPoints} height={420} />
+      )}
     </main>
   );
 }
