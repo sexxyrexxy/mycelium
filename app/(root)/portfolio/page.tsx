@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { UploadPage } from "@/components/upload/upload";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,25 +16,30 @@ interface Mushroom {
 export default function PortfolioList() {
   const [mushrooms, setMushrooms] = useState<Mushroom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showUploader, setShowUploader] = useState(false);
+  const [uploadBanner, setUploadBanner] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchMushrooms() {
-      try {
-        const res = await fetch("/api/mushrooms");
-        if (!res.ok) throw new Error("Failed to fetch mushrooms");
-        const data = await res.json();
-        setMushrooms(data);
-      } catch (err) {
-        console.error("Error fetching mushrooms:", err);
-      } finally {
-        setLoading(false);
-      }
+  const loadMushrooms = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/mushrooms");
+      if (!res.ok) throw new Error("Failed to fetch mushrooms");
+      const data = await res.json();
+      setMushrooms(data);
+    } catch (err) {
+      console.error("Error fetching mushrooms:", err);
+    } finally {
+      setLoading(false);
     }
-    fetchMushrooms();
   }, []);
 
+  useEffect(() => {
+    loadMushrooms();
+  }, [loadMushrooms]);
+
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 pt-4 sm:px-6">
         <div>
           <h1 className="text-xl font-bold sm:text-2xl">My Mushrooms</h1>
@@ -42,8 +47,20 @@ export default function PortfolioList() {
             Track every specimen across devices with responsive cards and tables.
           </p>
         </div>
-        <UploadPage />
+        <button
+          type="button"
+          onClick={() => setShowUploader(true)}
+          className="inline-flex items-center justify-center rounded-full bg-[#564930] px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-[#423621]"
+        >
+          Upload CSV
+        </button>
       </div>
+
+      {uploadBanner ? (
+        <div className="mx-4 sm:mx-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {uploadBanner}
+        </div>
+      ) : null}
 
       {loading ? (
         <>
@@ -173,6 +190,38 @@ export default function PortfolioList() {
           </div>
         </>
       )}
-    </div>
+      </div>
+      {showUploader ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="relative w-[min(520px,92vw)] rounded-3xl bg-white p-6 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowUploader(false)}
+              className="absolute right-4 top-4 text-muted-foreground transition hover:text-foreground"
+              aria-label="Close uploader"
+            >
+              ×
+            </button>
+            <h2 className="text-xl font-semibold text-foreground">
+              Import Mushroom Signals
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Drop in a CSV exported from your sensor rig. We will create a new mushroom record and stream the readings to the charts instantly.
+            </p>
+            <div className="mt-6">
+              <UploadPage
+                onClose={() => setShowUploader(false)}
+                onUploaded={() => {
+                  setUploadBanner("Upload successful—your mushroom is syncing now.");
+                  setShowUploader(false);
+                  loadMushrooms();
+                  setTimeout(() => setUploadBanner(null), 4000);
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }

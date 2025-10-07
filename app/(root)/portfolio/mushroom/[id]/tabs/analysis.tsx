@@ -35,8 +35,8 @@ export function Analysis() {
   const mushId = id ?? "";
 
   const {
-    data,
     rangeData,
+    viewData,
     loading,
     isRefetching,
     pendingRange,
@@ -55,6 +55,15 @@ export function Analysis() {
       })),
     [rangeData]
   );
+  const standardChartData = useMemo(
+    () =>
+      viewData.map((point) => ({
+        timestamp: point.ms,
+        signal: point.signal,
+        iso: point.timestamp,
+      })),
+    [viewData]
+  );
 
   const [visibleData, setVisibleData] = useState<{ timestamp: number; signal: number }[]>([]);
   const [simIndex, setSimIndex] = useState(0);
@@ -65,19 +74,29 @@ export function Analysis() {
   );
 
   useEffect(() => {
+    if (selectedRange !== "rt") {
+      setVisibleData([]);
+      setSimIndex(0);
+      return;
+    }
+
     if (!baseData.length) {
       setVisibleData([]);
       setSimIndex(0);
       return;
     }
 
-    const initialWindow = Math.min(baseData.length, Math.max(100, Math.floor(baseData.length * 0.1)));
+    const initialWindow = Math.min(
+      baseData.length,
+      Math.max(120, Math.floor(baseData.length * 0.15))
+    );
 
     setVisibleData(baseData.slice(0, initialWindow));
     setSimIndex(initialWindow);
-  }, [baseData]);
+  }, [selectedRange, baseData]);
 
   useEffect(() => {
+    if (selectedRange !== "rt") return;
     if (!baseData.length) return;
     if (simIndex >= baseData.length) return;
 
@@ -88,12 +107,16 @@ export function Analysis() {
         setVisibleData(baseData.slice(0, next));
         return next;
       });
-    }, 1000);
+    }, 3000);
 
     return () => clearInterval(interval);
-  }, [baseData, simIndex]);
+  }, [selectedRange, baseData, simIndex]);
 
-  const simulationData = visibleData.length ? visibleData : baseData;
+  const simulationData = selectedRange === "rt"
+    ? visibleData.length
+      ? visibleData
+      : baseData
+    : standardChartData;
 
   const metrics = useMemo(() => {
     if (!simulationData.length) {
@@ -197,11 +220,17 @@ export function Analysis() {
     metrics.low != null ? `${metrics.low.toFixed(2)} mV` : "—";
   const spikeDisplay =
     metrics.volatility != null && metrics.volatility > 0 ? metrics.spikeCount : 0;
-  const streamProgress = baseData.length
+  const streamProgress = selectedRange === "rt" && baseData.length
     ? Math.round((simulationData.length / baseData.length) * 100)
     : 0;
-  const isInitialLoading = loading && !baseData.length;
-  const isEmpty = !loading && !error && !baseData.length;
+  const isInitialLoading =
+    selectedRange === "rt"
+      ? loading && !baseData.length
+      : loading && !standardChartData.length;
+  const isEmpty =
+    selectedRange === "rt"
+      ? !loading && !error && !baseData.length
+      : !loading && !error && !standardChartData.length;
   // --- Initialize Voronoi ---
   useEffect(() => {
     if (!svgRef.current) return;
@@ -264,7 +293,7 @@ export function Analysis() {
                   <Loader2 className="size-3 animate-spin text-muted-foreground" />
                 ) : null}
               </span>
-              {!isInitialLoading && !isEmpty && !error ? (
+              {selectedRange === "rt" && !isInitialLoading && !isEmpty && !error ? (
                 <span className="mt-1 block text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
                   Simulation {streamProgress}% complete
                 </span>
@@ -348,12 +377,14 @@ export function Analysis() {
                   />
                 </LineChart>
               </ChartContainer>
-              <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{ width: `${Math.min(100, Math.max(0, streamProgress))}%` }}
-                />
-              </div>
+              {selectedRange === "rt" ? (
+                <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${Math.min(100, Math.max(0, streamProgress))}%` }}
+                  />
+                </div>
+              ) : null}
             </div>
           )}
         </CardContent>
@@ -384,39 +415,49 @@ export function Analysis() {
             <h2 className="text-lg font-semibold text-center">Metrics</h2>
             <div className="mx-auto h-px w-3/4 bg-[#564930]"></div>
 
-            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
-              <CardTitle className="text-sm font-semibold">Latest Signal</CardTitle>
-              <CardContent className="text-md font-semibold p-0 flex flex-col items-center gap-1">
-                <span>{formattedLatestSignal}</span>
-                <span className="text-xs text-gray-500">{formattedLatestTime}</span>
+            <Card className="overflow-hidden rounded-2xl border-none bg-gradient-to-br from-emerald-50 via-white to-white shadow-lg">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">
+                  Latest pulse
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-800">{formattedLatestSignal}</p>
+                <p className="text-xs text-muted-foreground">{formattedLatestTime}</p>
               </CardContent>
             </Card>
 
-            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
-              <CardTitle className="text-sm font-semibold">Range Change</CardTitle>
-              <CardContent className="text-md font-semibold p-0 items-center flex flex-col gap-1">
-                <span>{formattedChange}</span>
-                {formattedChangePct && (
-                  <span className="text-xs text-gray-500">{formattedChangePct}</span>
-                )}
+            <Card className="overflow-hidden rounded-2xl border-none bg-gradient-to-br from-amber-50 via-white to-white shadow-lg">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-amber-700/70">
+                  Trend direction
+                </p>
+                <p className={`mt-2 text-2xl font-semibold ${formattedChange.startsWith("-") ? "text-amber-700" : "text-amber-600"}`}>
+                  {formattedChange}
+                </p>
+                {formattedChangePct ? (
+                  <p className="text-xs text-muted-foreground">{formattedChangePct}</p>
+                ) : null}
               </CardContent>
             </Card>
 
-            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
-              <CardTitle className="text-sm font-semibold">Volatility</CardTitle>
-              <CardContent className="text-md font-semibold p-0 items-center flex flex-col gap-1">
-                <span>{formattedVolatility}</span>
-                <span className="text-xs text-gray-500">avg {formattedAverage}</span>
+            <Card className="overflow-hidden rounded-2xl border-none bg-gradient-to-br from-sky-50 via-white to-white shadow-lg">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-sky-700/70">
+                  Variability
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-sky-700">{formattedVolatility}</p>
+                <p className="text-xs text-muted-foreground">avg {formattedAverage}</p>
               </CardContent>
             </Card>
 
-            <Card className="p-2 bg-gray-50 rounded-2xl shadow-inner">
-              <CardTitle className="text-sm font-semibold">Spike Alerts</CardTitle>
-              <CardContent className="text-md font-semibold p-0 items-center flex flex-col gap-1">
-                <span>{spikeDisplay}</span>
-                <span className="text-xs text-gray-500">
+            <Card className="overflow-hidden rounded-2xl border-none bg-gradient-to-br from-rose-50 via-white to-white shadow-lg">
+              <CardContent className="p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-rose-700/70">
+                  Spike alerts
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-rose-700">{spikeDisplay}</p>
+                <p className="text-xs text-muted-foreground">
                   High {formattedHigh} · Low {formattedLow}
-                </span>
+                </p>
               </CardContent>
             </Card>
 

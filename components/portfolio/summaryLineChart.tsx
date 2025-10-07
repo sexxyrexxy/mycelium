@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
 import {
   Card,
@@ -40,9 +40,10 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
     setSelectedRange,
     options,
     stats,
+    rangeData,
   } = useMushroomSignals(mushId);
 
-  const chartData = useMemo(
+  const standardChartData = useMemo(
     () =>
       viewData.map((point) => ({
         date: point.timestamp,
@@ -50,6 +51,57 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
       })),
     [viewData]
   );
+
+  const [rtSeries, setRtSeries] = useState<{ date: string; signal: number }[]>([]);
+  const [rtProgress, setRtProgress] = useState(0);
+  const rtPointerRef = useRef(0);
+
+  useEffect(() => {
+    if (selectedRange !== "rt") {
+      rtPointerRef.current = 0;
+      setRtSeries([]);
+      setRtProgress(0);
+      return;
+    }
+
+    if (!rangeData.length) {
+      rtPointerRef.current = 0;
+      setRtSeries([]);
+      setRtProgress(0);
+      return;
+    }
+
+    const seedCount = Math.min(rangeData.length, 150);
+    rtPointerRef.current = seedCount;
+    setRtSeries(
+      rangeData.slice(0, seedCount).map((point) => ({
+        date: point.timestamp,
+        signal: point.signal,
+      }))
+    );
+    setRtProgress(Math.round((seedCount / rangeData.length) * 100));
+
+    const timer = setInterval(() => {
+      rtPointerRef.current = Math.min(rtPointerRef.current + 1, rangeData.length);
+      const next = rtPointerRef.current;
+      const start = Math.max(0, next - 360);
+      const slice = rangeData.slice(start, next);
+      setRtSeries(
+        slice.map((point) => ({
+          date: point.timestamp,
+          signal: point.signal,
+        }))
+      );
+      setRtProgress(Math.round((next / rangeData.length) * 100));
+      if (next >= rangeData.length) {
+        clearInterval(timer);
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, [selectedRange, rangeData]);
+
+  const chartData = selectedRange === "rt" ? rtSeries : standardChartData;
 
   const avg = stats.average;
   const total = stats.total != null ? Math.round(stats.total) : null;
@@ -59,12 +111,32 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
     [options, selectedRange]
   );
 
-  const isInitialLoading = loading && chartData.length === 0;
-  const isEmpty = !loading && !error && chartData.length === 0;
+  const isInitialLoading =
+    selectedRange === "rt"
+      ? loading && rtSeries.length === 0
+      : loading && standardChartData.length === 0;
+  const isEmpty =
+    selectedRange === "rt"
+      ? !loading && !error && rtSeries.length === 0
+      : !loading && !error && standardChartData.length === 0;
 
   const formatAxisTick = (value: string) => formatTickForRange(selectedRange, value);
   const formatTooltipLabel = (value: string) =>
     formatTooltipForRange(selectedRange, value);
+
+  const latestPoint = chartData.at(-1) ?? null;
+  const firstPoint = chartData[0] ?? null;
+  const highPoint = chartData.length
+    ? chartData.reduce((acc, point) => (point.signal > acc.signal ? point : acc), chartData[0])
+    : null;
+  const lowPoint = chartData.length
+    ? chartData.reduce((acc, point) => (point.signal < acc.signal ? point : acc), chartData[0])
+    : null;
+  const changeValue = latestPoint && firstPoint ? latestPoint.signal - firstPoint.signal : null;
+  const changePct =
+    changeValue != null && firstPoint && firstPoint.signal !== 0
+      ? (changeValue / Math.abs(firstPoint.signal)) * 100
+      : null;
 
   // activity interpretation
   const interpret = (value: number | null, average: number | null) => {
@@ -167,6 +239,11 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
               {isRefetching ? (
                 <Loader2 className="size-3 animate-spin text-muted-foreground" />
               ) : null}
+              {selectedRange === "rt" && rtSeries.length ? (
+                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                  {rtProgress}% replayed
+                </span>
+              ) : null}
             </span>
           </CardDescription>
           <SignalTimeRangeSelector
@@ -216,6 +293,47 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
             </LineChart>
           </ChartContainer>
         )}
+        {!isInitialLoading && !error && !isEmpty ? (
+          <div className="mt-5 grid gap-4 rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Latest signal
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {latestPoint ? `${latestPoint.signal.toFixed(2)} mV` : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {latestPoint
+                  ? formatTooltipForRange(selectedRange, latestPoint.date)
+                  : "Awaiting data"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Range insight
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {changeValue != null ? `${changeValue >= 0 ? "+" : ""}${changeValue.toFixed(2)} mV` : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {changePct != null ? `${changePct >= 0 ? "Up" : "Down"} ${Math.abs(changePct).toFixed(1)}% vs start` : "No change data"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Peaks spotted
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {highPoint ? highPoint.signal.toFixed(2) : "—"} / {lowPoint ? lowPoint.signal.toFixed(2) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {highPoint && lowPoint
+                  ? `High at ${formatTooltipForRange(selectedRange, highPoint.date)} · low at ${formatTooltipForRange(selectedRange, lowPoint.date)}`
+                  : "No extremes yet"}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

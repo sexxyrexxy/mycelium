@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-export type TimelineRange = "4h" | "12h" | "1d" | "3d" | "1w" | "all";
+export type TimelineRange = "rt" | "4h" | "12h" | "1d" | "3d" | "1w" | "all";
 
 export type SignalDatum = {
   timestamp: string;
@@ -10,12 +10,13 @@ export type SignalDatum = {
   ms: number;
 };
 
-const RANGE_ORDER: TimelineRange[] = ["4h", "12h", "1d", "1w", "all"];
+const RANGE_ORDER: TimelineRange[] = ["rt", "4h", "12h", "1d", "3d", "1w", "all"];
 
 const CACHE_TTL_MS = 30_000;
 const rangeCache = new Map<string, { data: SignalDatum[]; fetchedAt: number }>();
 
 export const TIMELINE_OPTIONS: { id: TimelineRange; label: string }[] = [
+  { id: "rt", label: "Real Time" },
   { id: "4h", label: "Last 4 Hours" },
   { id: "12h", label: "Last 12 Hours" },
   { id: "1d", label: "Last Day" },
@@ -41,6 +42,7 @@ const parseSignals = (signals: ApiSignal[] = []): SignalDatum[] => {
 };
 
 const TARGET_POINTS: Record<TimelineRange, number> = {
+  rt: 360,
   "4h": 720,
   "12h": 720,
   "1d": 600,
@@ -50,6 +52,7 @@ const TARGET_POINTS: Record<TimelineRange, number> = {
 };
 
 const downsampleSeries = (series: SignalDatum[], range: TimelineRange) => {
+  if (range === "rt") return series;
   const target = TARGET_POINTS[range] ?? 600;
   if (series.length <= target) return series;
 
@@ -73,14 +76,14 @@ const downsampleSeries = (series: SignalDatum[], range: TimelineRange) => {
 };
 
 export function useMushroomSignals(mushId?: string | null) {
-  const [selectedRange, setSelectedRange] = useState<TimelineRange>("4h");
+  const [selectedRange, setSelectedRange] = useState<TimelineRange>("rt");
   const [dataByRange, setDataByRange] = useState<Partial<Record<TimelineRange, SignalDatum[]>>>({});
   const [errorByRange, setErrorByRange] = useState<Partial<Record<TimelineRange, string>>>({});
   const [pendingRange, setPendingRange] = useState<TimelineRange | null>(null);
   const [lastUpdatedByRange, setLastUpdatedByRange] = useState<Partial<Record<TimelineRange, number>>>({});
 
   useEffect(() => {
-    setSelectedRange("4h");
+    setSelectedRange("rt");
     setDataByRange({});
     setErrorByRange({});
     setPendingRange(null);
@@ -93,6 +96,7 @@ export function useMushroomSignals(mushId?: string | null) {
     }
 
     const range = selectedRange;
+    const apiRange = range === "rt" ? "4h" : range;
     const key = `${mushId}:${range}`;
     const now = Date.now();
     const cached = rangeCache.get(key);
@@ -116,7 +120,7 @@ export function useMushroomSignals(mushId?: string | null) {
     const load = async () => {
       try {
         const res = await fetch(
-          `/api/mushroom/${encodeURIComponent(mushId)}?range=${range}`,
+          `/api/mushroom/${encodeURIComponent(mushId)}?range=${apiRange}`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -127,9 +131,20 @@ export function useMushroomSignals(mushId?: string | null) {
         const parsed = parseSignals(payload?.signals ?? []);
         if (cancelled) return;
         const fetchedAt = Date.now();
-        setDataByRange((prev) => ({ ...prev, [range]: parsed }));
-        setLastUpdatedByRange((prev) => ({ ...prev, [range]: fetchedAt }));
+        setDataByRange((prev) => ({
+          ...prev,
+          [range]: parsed,
+          ...(range === "rt" ? { "4h": parsed } : {}),
+        }));
+        setLastUpdatedByRange((prev) => ({
+          ...prev,
+          [range]: fetchedAt,
+          ...(range === "rt" ? { "4h": fetchedAt } : {}),
+        }));
         rangeCache.set(key, { data: parsed, fetchedAt });
+        if (range === "rt") {
+          rangeCache.set(`${mushId}:4h`, { data: parsed, fetchedAt });
+        }
       } catch (err: any) {
         if (cancelled) return;
         setErrorByRange((prev) => ({
