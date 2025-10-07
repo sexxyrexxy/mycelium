@@ -30,37 +30,85 @@
 
 "use client";
 import { useRef, useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
-export const UploadPage = () => {
+type UploadPageProps = {
+  onClose?: () => void;
+  onUploaded?: (payload: any) => void;
+  className?: string;
+};
+
+export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [kind, setKind] = useState("");
 
   const handleButtonClick = () => {
-    fileInputRef.current?.click(); // open the file picker
+    fileInputRef.current?.click();
+  };
+
+  const reset = () => {
+    setBusy(false);
+    setStatus(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setName("");
+    setDescription("");
+    setKind("");
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!name || !kind) {
+      setError("Please provide a name and mushroom kind before uploading.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("name", name);
+    fd.append("description", description);
+    fd.append("kind", kind);
+    fd.append("userId", "demo-user-123");
 
     setBusy(true);
+    setStatus(`Uploading ${file.name}…`);
+    setError(null);
     try {
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const res = await fetch("/api/mushrooms", { method: "POST", body: fd });
       const json = await res.json();
-      alert(JSON.stringify(json));
+      if (!res.ok) throw new Error(json?.error ?? "Upload failed");
+      setStatus(`Uploaded ${file.name}`);
+      onUploaded?.(json);
+      setTimeout(() => {
+        onClose?.();
+        reset();
+      }, 1200);
     } catch (err: any) {
-      alert("Upload failed: " + err.message);
-    } finally {
+      setError(err?.message ?? "Upload failed");
       setBusy(false);
     }
   };
 
   return (
-    <div className="p-6 space-y-3">
-      {/* Hidden file input */}
+    <div className={`space-y-4 ${className ?? ""}`}>
       <input
         ref={fileInputRef}
         type="file"
@@ -68,16 +116,79 @@ export const UploadPage = () => {
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
+      <div className="space-y-4 rounded-2xl border border-dashed border-muted-foreground/50 bg-muted/30 p-5 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-2">
+            <Label htmlFor="mushroom-name" className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+              Name
+            </Label>
+            <Input
+              id="mushroom-name"
+              placeholder="e.g. Ghost Fungi #7"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={busy}
+            />
+          </div>
 
-      {/* Visible button that opens file picker */}
-      <button
-        type="button"
-        onClick={handleButtonClick}
-        disabled={busy}
-        className="px-4 py-2 bg-white font-bold text-[#564930] rounded hover:bg-[#c6c6c6] drop-shadow-[2px_2px_4px_rgba(0,0,0,0.6)]"
-      >
-        {busy ? "Uploading…" : "Upload CSV"}
-      </button>
+          <div className="grid gap-2">
+            <Label htmlFor="mushroom-desc" className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+              Description
+            </Label>
+            <Textarea
+              id="mushroom-desc"
+              placeholder="Optional notes about substrate, environment, etc."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              disabled={busy}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+              Mushroom kind
+            </Label>
+            <Select
+              value={kind}
+              onValueChange={(value) => setKind(value)}
+              disabled={busy}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select kind" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Oyster">Oyster</SelectItem>
+                <SelectItem value="Shiitake">Shiitake</SelectItem>
+                <SelectItem value="Enokitake">Enokitake</SelectItem>
+                <SelectItem value="King Oyster">King Oyster</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="rounded-xl bg-white/80 px-4 py-3 text-xs text-muted-foreground shadow-inner">
+          Attach the CSV exported from your sensor rig. We map timestamps to `Timestamp` and millivolts to `Signal_mV` before pushing to BigQuery.
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleButtonClick}
+          disabled={busy || !name || !kind}
+          className="w-full rounded-xl bg-[#564930] font-semibold text-white shadow-md transition hover:bg-[#423621] disabled:opacity-60"
+        >
+          {busy ? "Uploading…" : "Choose CSV"}
+        </Button>
+      </div>
+      {status && !error ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+          {status}
+        </div>
+      ) : null}
+      {error ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 };

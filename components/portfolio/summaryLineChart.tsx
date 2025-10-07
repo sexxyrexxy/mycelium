@@ -1,8 +1,7 @@
 "use client";
 
-import * as React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
-import { useState, useEffect, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -15,11 +14,13 @@ import {
   ChartContainer,
   ChartTooltip,
 } from "@/components/ui/chart";
-
-type ApiSignal = { timestamp: string; signal: number | null };
-type ApiResponse =
-  | { mushId: string; signals: ApiSignal[] }
-  | { id: string; signals: ApiSignal[]; [k: string]: any };
+import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
+import {
+  useMushroomSignals,
+  TimelineRange,
+} from "@/hooks/useMushroomSignals";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2 } from "lucide-react";
 
 const chartConfig = {
   signal: {
@@ -29,56 +30,113 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
-  // Hooks FIRST
-  const [chartData, setChartData] = useState<
-    { date: string; signal: number }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    viewData,
+    loading,
+    isRefetching,
+    pendingRange,
+    error,
+    selectedRange,
+    setSelectedRange,
+    options,
+    stats,
+    rangeData,
+  } = useMushroomSignals(mushId);
+
+  const standardChartData = useMemo(
+    () =>
+      viewData.map((point) => ({
+        date: point.timestamp,
+        signal: point.signal,
+      })),
+    [viewData]
+  );
+
+  const [rtSeries, setRtSeries] = useState<{ date: string; signal: number }[]>([]);
+  const [rtProgress, setRtProgress] = useState(0);
+  const rtPointerRef = useRef(0);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/mushroom/${mushId}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`API ${res.status}`);
+    if (selectedRange !== "rt") {
+      rtPointerRef.current = 0;
+      setRtSeries([]);
+      setRtProgress(0);
+      return;
+    }
 
-        const payload: ApiResponse = await res.json();
-        const signals = (payload as any).signals;
+    if (!rangeData.length) {
+      rtPointerRef.current = 0;
+      setRtSeries([]);
+      setRtProgress(0);
+      return;
+    }
 
-        if (!Array.isArray(signals))
-          throw new Error("API payload has no 'signals' array");
+    const seedCount = Math.min(rangeData.length, 150);
+    rtPointerRef.current = seedCount;
+    setRtSeries(
+      rangeData.slice(0, seedCount).map((point) => ({
+        date: point.timestamp,
+        signal: point.signal,
+      }))
+    );
+    setRtProgress(Math.round((seedCount / rangeData.length) * 100));
 
-        const data = signals
-          .filter((s: ApiSignal) => s && s.timestamp && s.signal != null)
-          .map((s: ApiSignal) => ({
-            date: s.timestamp,
-            signal: Number(s.signal),
-          }));
-
-        setChartData(data);
-      } catch (e: any) {
-        setError(e?.message ?? "Failed to fetch");
-      } finally {
-        setLoading(false);
+    const timer = setInterval(() => {
+      rtPointerRef.current = Math.min(rtPointerRef.current + 1, rangeData.length);
+      const next = rtPointerRef.current;
+      const start = Math.max(0, next - 360);
+      const slice = rangeData.slice(start, next);
+      setRtSeries(
+        slice.map((point) => ({
+          date: point.timestamp,
+          signal: point.signal,
+        }))
+      );
+      setRtProgress(Math.round((next / rangeData.length) * 100));
+      if (next >= rangeData.length) {
+        clearInterval(timer);
       }
-    })();
-  }, [mushId]);
+    }, 3000);
 
-  // Average for interpretation
-  const avg = useMemo(() => {
-    if (!chartData.length) return null;
-    const sum = chartData.reduce((acc, cur) => acc + cur.signal, 0);
-    return sum / chartData.length;
-  }, [chartData]);
+    return () => clearInterval(timer);
+  }, [selectedRange, rangeData]);
 
-  // Early returns AFTER hooks
-  if (loading) return <div className="p-6">Loading…</div>;
-  if (error) return <div className="p-6 text-red-600">{error}</div>;
-  if (!chartData.length) return <div className="p-6">No signal data.</div>;
+  const chartData = selectedRange === "rt" ? rtSeries : standardChartData;
 
-  const total = Math.round(chartData.reduce((acc, cur) => acc + cur.signal, 0));
+  const avg = stats.average;
+  const total = stats.total != null ? Math.round(stats.total) : null;
+
+  const rangeLabel = useMemo(
+    () => options.find((opt) => opt.id === selectedRange)?.label ?? "",
+    [options, selectedRange]
+  );
+
+  const isInitialLoading =
+    selectedRange === "rt"
+      ? loading && rtSeries.length === 0
+      : loading && standardChartData.length === 0;
+  const isEmpty =
+    selectedRange === "rt"
+      ? !loading && !error && rtSeries.length === 0
+      : !loading && !error && standardChartData.length === 0;
+
+  const formatAxisTick = (value: string) => formatTickForRange(selectedRange, value);
+  const formatTooltipLabel = (value: string) =>
+    formatTooltipForRange(selectedRange, value);
+
+  const latestPoint = chartData.at(-1) ?? null;
+  const firstPoint = chartData[0] ?? null;
+  const highPoint = chartData.length
+    ? chartData.reduce((acc, point) => (point.signal > acc.signal ? point : acc), chartData[0])
+    : null;
+  const lowPoint = chartData.length
+    ? chartData.reduce((acc, point) => (point.signal < acc.signal ? point : acc), chartData[0])
+    : null;
+  const changeValue = latestPoint && firstPoint ? latestPoint.signal - firstPoint.signal : null;
+  const changePct =
+    changeValue != null && firstPoint && firstPoint.signal !== 0
+      ? (changeValue / Math.abs(firstPoint.signal)) * 100
+      : null;
 
   // activity interpretation
   const interpret = (value: number | null, average: number | null) => {
@@ -111,20 +169,13 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
     const value =
       typeof point?.value === "number" ? (point.value as number) : null; //extracts signal from a point, if not a number return null
     const info = interpret(value, avg);
+    const formattedLabel = label ? formatTooltipForRange(selectedRange, label) : "";
 
     return (
       <div className="rounded-md border bg-background p-2 shadow-sm w-[220px]">
         {/* Timestamp */}
         <div className="text-xs text-muted-foreground">
-          {label
-            ? new Date(label).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })
-            : ""}
+          {formattedLabel}
         </div>
 
         {/* Value */}
@@ -165,48 +216,172 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
         <div className="flex items-center border-t sm:border-t-0 sm:border-l px-6 py-4 sm:px-8 sm:py-6">
           <div>
             <span className="text-muted-foreground block text-xs">
-              Total (mV)
+              Range Sum (mV)
             </span>
             <span className="text-lg leading-none font-bold sm:text-3xl">
-              {total.toLocaleString()}
+              {isInitialLoading ? (
+                <Skeleton className="h-5 w-20" />
+              ) : total != null ? (
+                total.toLocaleString()
+              ) : (
+                "—"
+              )}
             </span>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="px-2 sm:p-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <LineChart data={chartData} margin={{ left: 12, right: 12 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) =>
-                new Date(value).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              }
-            />
-            <ChartTooltip content={<CustomTooltip />} />
-            <Line
-              dataKey="signal"
-              type="monotone"
-              stroke={`var(--color-signal)`}
-              strokeWidth={2}
-              dot={false}
-            />
-          </LineChart>
-        </ChartContainer>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 sm:px-0">
+          <CardDescription className="text-xs uppercase tracking-wide">
+            <span className="flex items-center gap-2">
+              {rangeLabel}
+              {isRefetching ? (
+                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              ) : null}
+              {selectedRange === "rt" && rtSeries.length ? (
+                <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                  {rtProgress}% replayed
+                </span>
+              ) : null}
+            </span>
+          </CardDescription>
+          <SignalTimeRangeSelector
+            value={selectedRange}
+            onChange={setSelectedRange}
+            pendingId={pendingRange}
+          />
+        </div>
+        {isInitialLoading ? (
+          <div className="h-[250px] w-full overflow-hidden rounded-xl border border-dashed border-muted-foreground/40 bg-background">
+            <Skeleton className="h-full w-full" />
+          </div>
+        ) : error ? (
+          <div className="flex h-[250px] items-center justify-center rounded-xl border border-red-200 bg-red-50 text-sm text-red-600">
+            {error}
+          </div>
+        ) : isEmpty ? (
+          <div className="flex h-[250px] items-center justify-center rounded-xl border border-dashed border-muted-foreground/40 text-sm text-muted-foreground">
+            No signal data for this range.
+          </div>
+        ) : (
+          <ChartContainer
+            config={chartConfig}
+            className="aspect-auto h-[250px] w-full"
+          >
+            <LineChart data={chartData} margin={{ left: 12, right: 12 }}>
+              <CartesianGrid vertical={false} />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={32}
+                tickFormatter={formatAxisTick}
+              />
+              <ChartTooltip
+                content={<CustomTooltip />}
+                labelFormatter={formatTooltipLabel}
+              />
+              <Line
+                dataKey="signal"
+                type="monotone"
+                stroke={`var(--color-signal)`}
+                strokeWidth={2}
+                dot={false}
+              />
+            </LineChart>
+          </ChartContainer>
+        )}
+        {!isInitialLoading && !error && !isEmpty ? (
+          <div className="mt-5 grid gap-4 rounded-2xl border bg-muted/30 p-4 text-sm text-muted-foreground sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Latest signal
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {latestPoint ? `${latestPoint.signal.toFixed(2)} mV` : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {latestPoint
+                  ? formatTooltipForRange(selectedRange, latestPoint.date)
+                  : "Awaiting data"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Range insight
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {changeValue != null ? `${changeValue >= 0 ? "+" : ""}${changeValue.toFixed(2)} mV` : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {changePct != null ? `${changePct >= 0 ? "Up" : "Down"} ${Math.abs(changePct).toFixed(1)}% vs start` : "No change data"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                Peaks spotted
+              </p>
+              <p className="mt-1 text-lg font-semibold text-foreground">
+                {highPoint ? highPoint.signal.toFixed(2) : "—"} / {lowPoint ? lowPoint.signal.toFixed(2) : "—"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {highPoint && lowPoint
+                  ? `High at ${formatTooltipForRange(selectedRange, highPoint.date)} · low at ${formatTooltipForRange(selectedRange, lowPoint.date)}`
+                  : "No extremes yet"}
+              </p>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
+}
+
+function formatTickForRange(range: TimelineRange, value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  switch (range) {
+    case "1w":
+    case "all":
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    case "3d":
+      return date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+      });
+    case "1d":
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    default:
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+  }
+}
+
+function formatTooltipForRange(range: TimelineRange, value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const baseOptions: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  if (range === "all") {
+    return date.toLocaleString("en-US", {
+      ...baseOptions,
+      year: "numeric",
+    });
+  }
+  return date.toLocaleString("en-US", baseOptions);
 }

@@ -4,13 +4,13 @@ import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   LayoutDashboard,
-  BarChart3,
   Share2,
   Search,
   Layers,
+  Waves,
 } from "lucide-react";
 import Overview from "./tabs/overview";
-import Chart from "./tabs/chart";
+import SignalRiverTab from "./tabs/river";
 import MushroomNetwork from "./tabs/network";
 import { Analysis } from "./tabs/analysis";
 import { useParams } from "next/navigation";
@@ -27,7 +27,7 @@ export default function Page() {
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-3 gap-2 mb-6 w-full">
+        <TabsList className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-6 w-full">
           <TabsTrigger
             value="overview"
             className="flex items-center justify-center gap-2"
@@ -35,13 +35,13 @@ export default function Page() {
             <LayoutDashboard className="h-4 w-4" />
             <span className="hidden md:inline">Overview</span>
           </TabsTrigger>
-          {/* <TabsTrigger
-            value="chart"
+          <TabsTrigger
+            value="river"
             className="flex items-center justify-center gap-2"
           >
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden md:inline">Chart</span>
-          </TabsTrigger> */}
+            <Waves className="h-4 w-4" />
+            <span className="hidden md:inline">Signal River</span>
+          </TabsTrigger>
           <TabsTrigger
             value="network"
             className="flex items-center justify-center gap-2"
@@ -70,8 +70,8 @@ export default function Page() {
 
           <Overview />
         </TabsContent>
-        <TabsContent value="chart">
-          <Chart/>
+        <TabsContent value="river">
+          <SignalRiverTab />
         </TabsContent>
         <TabsContent value="network">
           <MushroomNetwork />

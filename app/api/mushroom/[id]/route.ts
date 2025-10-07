@@ -34,23 +34,81 @@ function tsString(ts: any): string {
 }
 
 // ---- GET /api/mushroom/[id] ----
-export async function GET(
-  _req: Request,
-  ctx: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const mushId = id; // UUID string
+  const mushId = id;
+
+  const url = new URL(req.url);
+  const rangeParam = (url.searchParams.get("range") || "all").toLowerCase();
+  const limitParam = url.searchParams.get("limit");
+
+const rangeMap: Record<string, { label: string; hours: number }> = {
+  "4h": { label: "4h", hours: 4 },
+  "4hours": { label: "4h", hours: 4 },
+  "12h": { label: "12h", hours: 12 },
+  "12hours": { label: "12h", hours: 12 },
+  "1d": { label: "1d", hours: 24 },
+  "24h": { label: "1d", hours: 24 },
+  "day": { label: "1d", hours: 24 },
+  "3d": { label: "3d", hours: 24 * 3 },
+  "72h": { label: "3d", hours: 24 * 3 },
+  "1w": { label: "1w", hours: 24 * 7 },
+  "7d": { label: "1w", hours: 24 * 7 },
+  "week": { label: "1w", hours: 24 * 7 },
+  "all": { label: "all", hours: 0 },
+  "alltime": { label: "all", hours: 0 },
+  "max": { label: "all", hours: 0 },
+};
+
+  const selected = rangeMap[rangeParam] || rangeMap["all"];
+  const rangeKey = selected.label;
+  const hoursWindow = selected.hours;
+
+  let limit: number | null = null;
+  if (limitParam) {
+    const parsed = Number(limitParam);
+    if (Number.isFinite(parsed)) {
+      limit = Math.max(1, Math.min(100_000, Math.floor(parsed)));
+    }
+  }
 
   try {
-    // BigQuery signals
-    const [rows] = await bq.query({
-      query: `
-        SELECT Timestamp, Signal_mV
+    const limitClause = limit ? "\n    LIMIT @rowLimit" : "";
+
+    const query = `
+      WITH base AS (
+        SELECT
+          Timestamp,
+          Signal_mV,
+          MAX(Timestamp) OVER() AS latest_ts
         FROM \`${BQ_PROJECT_ID}.${DATASET_ID}.${SIGNALS_TABLE}\`
         WHERE MushID = @mushId
-        ORDER BY Timestamp ASC
-      `,
-      params: { mushId },
+      )
+      SELECT Timestamp, Signal_mV
+      FROM base
+      WHERE (
+          @range = 'all'
+          OR (
+            latest_ts IS NOT NULL
+            AND Timestamp >= TIMESTAMP_SUB(latest_ts, INTERVAL CAST(@hours AS INT64) HOUR)
+          )
+        )
+      ORDER BY Timestamp ASC${limitClause};
+    `;
+
+    const params: Record<string, unknown> = {
+      mushId,
+      range: rangeKey,
+      hours: hoursWindow,
+    };
+
+    if (limit) {
+      params.rowLimit = limit;
+    }
+
+    const [rows] = await bq.query({
+      query,
+      params,
       location: LOCATION,
     });
 
@@ -59,7 +117,16 @@ export async function GET(
       signal: r.Signal_mV ?? null,
     }));
 
-    return NextResponse.json({ mushId, signals });
+    return NextResponse.json({
+      mushId,
+      signals,
+      meta: {
+        range: rangeKey,
+        count: signals.length,
+        limited: Boolean(limit),
+        hours: hoursWindow,
+      },
+    });
   } catch (e: any) {
     console.error("mushroom/[id] error:", e);
     return NextResponse.json(
