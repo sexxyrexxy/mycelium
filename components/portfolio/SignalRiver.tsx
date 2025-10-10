@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -115,7 +114,10 @@ export function SignalRiver({
       });
 
       if (particlesRef.current.length > MAX_PARTICLES) {
-        particlesRef.current.splice(0, particlesRef.current.length - MAX_PARTICLES);
+        particlesRef.current.splice(
+          0,
+          particlesRef.current.length - MAX_PARTICLES
+        );
       }
     };
 
@@ -142,7 +144,10 @@ export function SignalRiver({
         const glow = 8 + p.intensity * 18;
         const alpha = Math.max(p.life, 0) * 0.95;
         const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
-        gradient.addColorStop(0, `rgba(${p.color[0]}, ${p.color[1]}, ${p.color[2]}, ${alpha})`);
+        gradient.addColorStop(
+          0,
+          `rgba(${p.color[0]}, ${p.color[1]}, ${p.color[2]}, ${alpha})`
+        );
         gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
 
         ctx.fillStyle = gradient;

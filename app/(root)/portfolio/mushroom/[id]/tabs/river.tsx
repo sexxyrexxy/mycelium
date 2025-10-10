@@ -11,6 +11,7 @@ import {
 import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
 import { SignalRiver } from "@/components/portfolio/SignalRiver";
 import { Loader2, RotateCcw } from "lucide-react";
+import { MushroomVisualizer } from "@/components/portfolio/MushroomVisualizer";
 
 const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "rt",
@@ -342,36 +343,45 @@ export default function SignalRiverTab() {
           </div>
         ) : null}
 
-        <aside className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
-          <h3 className="text-sm font-semibold text-foreground">
-            Current story
-          </h3>
-          {currentStory ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
-                {formatRangeLabel(currentStory.start, currentStory.end)}
-              </p>
-              <p className="text-lg font-semibold text-foreground">
-                {currentStory.title}
-              </p>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-                {currentStory.mood}
-              </p>
-              <p>{currentStory.summary}</p>
-              <div className="mt-3 h-1 rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-emerald-500 transition-all"
-                  style={{
-                    width: `${Math.round((currentStory.progress ?? 0) * 100)}%`,
-                  }}
-                />
+        <aside className="flex flex-col gap-4">
+          {/* Current story */}
+          <div className="rounded-2xl border bg-muted/20 p-4 text-sm text-muted-foreground">
+            <h3 className="text-sm font-semibold text-foreground">
+              Current story
+            </h3>
+            {currentStory ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                  {formatRangeLabel(currentStory.start, currentStory.end)}
+                </p>
+                <p className="text-lg font-semibold text-foreground">
+                  {currentStory.title}
+                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+                  {currentStory.mood}
+                </p>
+                <p>{currentStory.summary}</p>
+                <div className="mt-3 h-1 rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-emerald-500 transition-all"
+                    style={{
+                      width: `${Math.round(
+                        (currentStory.progress ?? 0) * 100
+                      )}%`,
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-muted-foreground">
-              Listening for the next movement…
-            </p>
-          )}
+            ) : (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Listening for the next movement…
+              </p>
+            )}
+          </div>
+          {/* Mushroom visualizer */}
+          <div className="w-full h-32 rounded-2xl border bg-muted/20 overflow-hidden">
+            <MushroomVisualizer data={data} />
+          </div>
         </aside>
       </div>
 
