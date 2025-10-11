@@ -11,6 +11,7 @@ import {
 import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
 import { SignalRiver } from "@/components/portfolio/SignalRiver";
 import { Loader2, RotateCcw } from "lucide-react";
+import MushroomLifeCycle from "@/components/portfolio/MushroomLifeCycle";
 
 const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "rt",
@@ -372,6 +373,10 @@ export default function SignalRiverTab() {
               Listening for the next movement…
             </p>
           )}
+          {/* Mushroom Phase*/}
+          <div className="">
+            <MushroomLifeCycle />
+          </div>
         </aside>
       </div>
 
