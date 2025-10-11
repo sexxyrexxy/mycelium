@@ -161,6 +161,7 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
                 <SelectItem value="Shiitake">Shiitake</SelectItem>
                 <SelectItem value="Enokitake">Enokitake</SelectItem>
                 <SelectItem value="King Oyster">King Oyster</SelectItem>
+                <SelectItem value="Ghost Fungi">Ghost Fungi</SelectItem>
               </SelectContent>
             </Select>
           </div>
