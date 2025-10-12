@@ -1,10 +1,19 @@
 // components/portfolio/sonification/SonificationPanel.tsx
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  useMushroomSignals,
+  type TimelineRange,
+  type SignalDatum,
+} from "@/hooks/useMushroomSignals";
+import { classifySignalWindows, type SignalWindowsAnalysis } from "@/lib/signalClassification";
 
-type Props = { csvUrl?: string };
+type Props = {
+  mushId?: string | null;
+  range?: TimelineRange;
+};
 
 type SunoTrack = {
   id: string;
@@ -16,11 +25,48 @@ type SunoTrack = {
 };
 
 type SunoStatusResponse = {
-  status: string; // PENDING | TEXT_SUCCESS | FIRST_SUCCESS | SUCCESS | FAIL | ...
+  status: string;
   response?: { sunoData?: SunoTrack[] };
 };
 
-export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
+const RANGE_LABELS: Record<TimelineRange, string> = {
+  rt: "Real Time",
+  "4h": "Last 4 Hours",
+  "12h": "Last 12 Hours",
+  "1d": "Last Day",
+  "3d": "Last 3 Days",
+  "1w": "Last Week",
+  all: "All Time",
+};
+
+const DEFAULT_RANGE: TimelineRange = "1d";
+
+function toSamples(data: SignalDatum[]): { samples: { signal: number; timestampMs: number }[] } {
+  if (!data.length) {
+    return { samples: [] };
+  }
+  const samples = data.map((datum) => ({
+    signal: datum.signal,
+    timestampMs: datum.ms,
+  }));
+  return { samples };
+}
+
+function describeAnalysis(analysis: SignalWindowsAnalysis | null, range: TimelineRange) {
+  if (!analysis) return null;
+  const startMs = analysis.windows[0]?.startMs ?? 0;
+  const endMs = analysis.windows.at(-1)?.endMs ?? startMs;
+  const durationMs = Math.max(endMs - startMs, 0);
+  const hours = durationMs ? durationMs / (1000 * 60 * 60) : null;
+  return {
+    rangeLabel: RANGE_LABELS[range] ?? range.toUpperCase(),
+    totalSamples: analysis.globalStats.count,
+    windowCount: analysis.windows.length,
+    hours,
+  };
+}
+
+export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -28,30 +74,49 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
   const [fullUrl, setFullUrl] = useState<string | null>(null);
   const taskIdRef = useRef<string | null>(null);
 
-  // --- lightweight CSV → number[] parser (first numeric token per row) ---
-  const loadSignal = useCallback(async () => {
-    const resp = await fetch(csvUrl, { cache: "no-store" });
-    if (!resp.ok) throw new Error(`Failed to load CSV: ${csvUrl}`);
-    const text = await resp.text();
+  const {
+    rangeData,
+    viewData,
+    selectedRange,
+    setSelectedRange,
+    loading: signalsLoading,
+    error: signalsError,
+  } = useMushroomSignals(mushId);
 
-    const lines = text.split(/\r?\n/);
-    const nums: number[] = [];
-    for (const line of lines) {
-      // pick the first parseable number in the row
-      const match = line.match(/-?\d+(\.\d+)?/g);
-      if (!match) continue;
-      const val = parseFloat(match[0]);
-      if (!Number.isNaN(val)) nums.push(val);
+  useEffect(() => {
+    if (!mushId) return;
+    if (selectedRange !== range) {
+      setSelectedRange(range);
     }
-    if (nums.length === 0) throw new Error("CSV contained no numeric values.");
-    // downsample a bit so prompts reflect recent window
-    const window = nums.slice(-Math.min(nums.length, 1500)); // up to last ~1500 samples
-    return window;
-  }, [csvUrl]);
+  }, [mushId, range, selectedRange, setSelectedRange]);
 
-  // --- start generation flow on click ---
+  const analysisSource = useMemo<SignalDatum[]>(
+    () => (rangeData.length ? rangeData : viewData),
+    [rangeData, viewData]
+  );
+
+  const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
+
+  const analysis: SignalWindowsAnalysis | null = useMemo(() => {
+    if (!samples.length) return null;
+    return classifySignalWindows(samples);
+  }, [samples]);
+
+  const analysisSummary = useMemo(
+    () => describeAnalysis(analysis, range),
+    [analysis, range]
+  );
+
+  const displayRange = analysisSummary?.rangeLabel ?? RANGE_LABELS[range] ?? RANGE_LABELS[DEFAULT_RANGE];
+
   const onHear = useCallback(async () => {
     if (busy) return;
+    if (!analysis || !analysis.windows.length) {
+      setError("Signal windows are still loading. Try again shortly.");
+      setStatus("error");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     setStatus("preparing");
@@ -60,18 +125,13 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
     taskIdRef.current = null;
 
     try {
-      // 1) get a representative signal window
-      const signal = await loadSignal();
-
-      // 2) map signal → Suno request body (from your sonify.ts)
       const mod = await import("@/components/portfolio/sonification/sonify");
-      if (typeof mod.mapSignalToSuno !== 'function') {
-        console.error('sonify exports:', Object.keys(mod));
-        throw new Error('mapSignalToSuno is not exported from sonify.ts');
+      if (typeof mod.mapSignalToSuno !== "function") {
+        console.error("sonify exports:", Object.keys(mod));
+        throw new Error("mapSignalToSuno is not exported from sonify.ts");
       }
-      const body = mod.mapSignalToSuno(signal);
+      const body = mod.mapSignalToSuno(analysis);
 
-      // 3) POST /api/suno/generate
       const genRes = await fetch("/api/suno/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,7 +144,6 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
       taskIdRef.current = genJson.taskId;
       setStatus("queued");
 
-      // 4) poll /api/suno/status until SUCCESS
       let keepPolling = true;
       while (keepPolling) {
         const tid = taskIdRef.current!;
@@ -100,13 +159,16 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
         setStatus(data.status ?? "unknown");
 
         const track = data?.response?.sunoData?.[0];
-        if (track?.streamAudioUrl && !streamUrl) setStreamUrl(track.streamAudioUrl);
-        if (track?.audioUrl) setFullUrl(track.audioUrl);
+        if (track?.streamAudioUrl) {
+          setStreamUrl((prev) => prev ?? track.streamAudioUrl ?? null);
+        }
+        if (track?.audioUrl) {
+          setFullUrl((prev) => prev ?? track.audioUrl ?? null);
+        }
 
         if (data.status === "SUCCESS" || data.status === "FAIL") {
           keepPolling = false;
         } else {
-          // Poll every 5s while in progress
           // eslint-disable-next-line no-await-in-loop
           await new Promise((r) => setTimeout(r, 5000));
         }
@@ -117,14 +179,16 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
     } finally {
       setBusy(false);
     }
-  }, [busy, loadSignal, streamUrl]);
+  }, [analysis, busy]);
 
-  // stop polling if unmounted
   useEffect(() => {
     return () => {
       taskIdRef.current = null;
     };
   }, []);
+
+  const signalLoadingState = signalsLoading && !analysis;
+  const disableButton = busy || !mushId || signalLoadingState || !analysis;
 
   return (
     <Card>
@@ -134,19 +198,29 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
           Generates music from your mushroom’s electrical signals via Suno. Source:{" "}
-          <code className="text-xs">{csvUrl}</code>
+          <span className="text-xs font-medium">
+            BigQuery · {displayRange}
+            {analysisSummary?.windowCount != null ? ` · ${analysisSummary.windowCount} windows` : ""}
+            {analysisSummary?.totalSamples != null ? ` · ${analysisSummary.totalSamples} samples` : ""}
+          </span>
         </p>
+
+        {signalsError && (
+          <p className="text-xs text-rose-600">
+            Failed to load signals: {signalsError}
+          </p>
+        )}
 
         <button
           onClick={onHear}
-          disabled={busy}
+          disabled={disableButton}
           className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          {busy ? "Working…" : "Hear your Mushroom"}
+          {busy ? "Working…" : mushId ? "Hear your Mushroom" : "Select a mushroom"}
         </button>
 
         <div className="text-sm">
-          <div>Status: {status}</div>
+          <div>Status: {signalLoadingState ? "loading signals…" : status}</div>
           {error && <div className="text-rose-600">Error: {error}</div>}
         </div>
 
@@ -165,6 +239,12 @@ export function SonificationPanel({ csvUrl = "/GhostFungi.csv" }: Props) {
               Open full MP3
             </a>
           </div>
+        )}
+
+        {!mushId && (
+          <p className="text-xs text-muted-foreground">
+            Pick a mushroom to enable sonification.
+          </p>
         )}
       </CardContent>
     </Card>
