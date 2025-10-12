@@ -1,29 +1,54 @@
 "use client";
 
-import { drawVoronoiChart } from "@/components/portfolio/network/Network";
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { drawVoronoiChart } from "@/components/portfolio/visualisation/Network";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const MushroomNetwork: React.FC = () => {
+type Signal = {
+  timestamp: string;
+  signal: number | null;
+};
+
+const MushroomNetwork: React.FC = () =>  {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const params = useParams();
+  const mushId = params?.id as string;
+
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (!svgRef.current) return;
+    if (!svgRef.current || !mushId) return;
+
+    setLoading(true);
+    setError(null);
 
     const ProcessDataWorker = new Worker("/Workers/ProcessData.js");
     let cleanup: (() => void) | null = null;
 
-    fetch("/GhostFungi.csv")
-      .then((res) => res.text())
-      .then((csvText) => {
-        ProcessDataWorker.postMessage({ type: "csv", data: csvText });
+    fetch(`/api/mushroom/${mushId}?range=1d`)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Unable to fetch mushroom signal data: API ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        const signals: Signal[] = json.signals;
+        ProcessDataWorker.postMessage({ type: "data", data: signals });
+      })
+      .catch((err) => {
+        console.error("Error fetching mushroom data:", err);
+        setError(err.message);
+        setLoading(false);
       });
 
     ProcessDataWorker.onmessage = (event) => {
       const { mappedSpeeds, normalizedBaseline, spikes, error } = event.data;
 
       if (error) {
-        console.error(error);
+        console.error("Worker error:", error);
+        setError("Failed to process mushroom signal data.");
+        setLoading(false);
         return;
       }
 
@@ -36,17 +61,17 @@ const MushroomNetwork: React.FC = () => {
         spikes,
         false
       );
+      setLoading(false);
     };
 
     return () => {
-      ProcessDataWorker.terminate();
       if (cleanup) cleanup();
+      ProcessDataWorker.terminate();
     };
-  }, []);
+  }, [mushId]);
 
   return (
     <div className="flex flex-col justify-center items-center min-h-[500px] bg-white px-4 md:px-0">
-      {/* Header */}
       <h1 className="mb-1 text-2xl font-bold">Mushroom Signal Network</h1>
       <h5 className="mb-2 text-gray-700 italic">
         Visualized using a Voronoi diagram
@@ -59,8 +84,21 @@ const MushroomNetwork: React.FC = () => {
       </p>
       <div className="mx-auto mb-6 h-px w-2/4 bg-[#564930]"></div>
 
-      {/* Voronoi Chart */}
-      <div className="rounded-2xl overflow-hidden shadow-md border border-gray-300/50 w-full max-w-[800px]">
+      {/* Container div for SVG with relative positioning for overlay */}
+      <div className="relative rounded-2xl overflow-hidden shadow-md border border-gray-300/50 w-full max-w-[800px]">
+        {error && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-100 text-red-700 text-sm font-medium text-center px-4">
+            {error}
+          </div>
+        )}
+
+        {/* Loading spinner overlay */}
+        {loading && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-50">
+            <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
+          </div>
+        )}
+
         <svg
           ref={svgRef}
           viewBox="0 0 800 600"
@@ -69,9 +107,8 @@ const MushroomNetwork: React.FC = () => {
         ></svg>
       </div>
 
-      {/* Interpretation Panels */}
       <div className="mt-6 w-full max-w-[800px] grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Background Panel */}
+        {/* Cards remain unchanged */}
         <Card>
           <CardHeader>
             <CardTitle>Background = Baseline Activity</CardTitle>
@@ -86,7 +123,6 @@ const MushroomNetwork: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Ripples Panel */}
         <Card>
           <CardHeader>
             <CardTitle>Ripples = Signal Dynamics</CardTitle>
@@ -103,7 +139,6 @@ const MushroomNetwork: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Ripple Colors Panel */}
         <Card>
           <CardHeader>
             <CardTitle>Ripple Colors</CardTitle>
@@ -125,7 +160,6 @@ const MushroomNetwork: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Grower Tips Panel */}
         <Card>
           <CardHeader>
             <CardTitle>Grower Tips</CardTitle>
@@ -141,8 +175,8 @@ const MushroomNetwork: React.FC = () => {
                 ideal for steady development.
               </li>
               <li>
-                Persistent gold flashes = check moisture, airflow, or light —
-                the mushroom may be stressed or over-stimulated.
+                Persistent gold flashes = check moisture, airflow, or light — the
+                mushroom may be stressed or over-stimulated.
               </li>
             </ul>
           </CardContent>
