@@ -1,6 +1,9 @@
 // components/portfolio/sonification/sonify.ts
 
-// ---------- Types ----------
+import type {
+  ClassifiedWindow,
+  SignalWindowsAnalysis,
+} from "@/lib/signalClassification";
 
 export type SunoRequest = {
   prompt: string;
@@ -9,208 +12,96 @@ export type SunoRequest = {
   model: "V4_5" | "V3_5" | "V4" | "V5";
   title?: string;
   style?: string;
-  styleWeight?: number;          // 0..1
-  weirdnessConstraint?: number;  // 0..1 (higher = weirder)
+  styleWeight?: number;
+  weirdnessConstraint?: number;
   negativeTags?: string;
 };
 
-// ---------- Helpers: basic stats ----------
-
-function clamp01(x: number) { return Math.min(1, Math.max(0, x)); }
-
-function meanAbs(arr: number[]) {
-  if (arr.length === 0) return 0;
-  let s = 0;
-  for (const v of arr) s += Math.abs(v);
-  return s / arr.length;
-}
-
-function std(arr: number[]) {
-  if (arr.length < 2) return 0;
-  const m = arr.reduce((a, b) => a + b, 0) / arr.length;
-  let v = 0;
-  for (const x of arr) v += (x - m) * (x - m);
-  return Math.sqrt(v / (arr.length - 1));
-}
-
-function diff(arr: number[]) {
-  const out: number[] = [];
-  for (let i = 1; i < arr.length; i++) out.push(arr[i] - arr[i - 1]);
-  return out;
-}
-
-// Downsample/compress into fixed number of bins by averaging blocks.
-// Works well when your timestamps are ~1Hz (your CSVs are).
-function binCompress(signal: number[], bins: number): number[] {
-  const N = signal.length;
-  if (N <= bins) return signal.slice(); // already short; let Suno reflect the micro-variation
-  const size = N / bins;
-  const out: number[] = new Array(bins);
-  for (let i = 0; i < bins; i++) {
-    const start = Math.floor(i * size);
-    const end = Math.min(N, Math.floor((i + 1) * size));
-    if (end <= start) { out[i] = signal[Math.min(start, N - 1)] ?? 0; continue; }
-    let sum = 0; let c = 0;
-    for (let j = start; j < end; j++) { sum += signal[j]; c++; }
-    out[i] = c ? sum / c : 0;
-  }
-  return out;
-}
-
-// Compute bin-wise features for structure mapping
-function featuresPerBin(binned: number[]) {
-  // Energy proxy: mean absolute value per bin (already averaged)
-  // Spike density: count(|Δ| > threshold) in a small window approximation.
-  const diffs = diff(binned);
-  const dStd = std(diffs) || 1e-6;
-  const spikeThresh = 2.0 * dStd; // "big jump" threshold ≈ 2σ
-
-  const energy: number[] = [];
-  const spikes: number[] = [];
-
-  // For each bin, approximate local energy & spikes from neighbors
-  for (let i = 0; i < binned.length; i++) {
-    const window = binned.slice(Math.max(0, i - 2), Math.min(binned.length, i + 3));
-    energy.push(meanAbs(window));
-    let s = 0;
-    for (let k = Math.max(0, i - 2); k < Math.min(binned.length - 1, i + 3); k++) {
-      if (Math.abs(binned[k + 1] - binned[k]) > spikeThresh) s++;
-    }
-    spikes.push(s);
-  }
-
-  // Normalize features to 0..1 for easier language mapping
-  const eMax = Math.max(...energy, 1e-6);
-  const sMax = Math.max(...spikes, 1e-6);
-  const eNorm = energy.map(v => v / eMax);
-  const sNorm = spikes.map(v => v / sMax);
-
-  return { energy: eNorm, spikes: sNorm };
-}
-
-// Partition into 3 acts based on median energy trend; emphasize where spikes cluster.
-function makeActs(energy: number[], spikes: number[]) {
-  const n = energy.length;
-  const A = Math.floor(n / 3), B = Math.floor((2 * n) / 3);
-
-  const acts = [
-    { name: "Act I",  range: [0, A] },
-    { name: "Act II", range: [A, B] },
-    { name: "Act III",range: [B, n] },
-  ] as const;
-
-  function summarize([lo, hi]: [number, number]) {
-    const e = energy.slice(lo, hi);
-    const s = spikes.slice(lo, hi);
-    const eAvg = e.reduce((a, b) => a + b, 0) / Math.max(1, e.length);
-    const sAvg = s.reduce((a, b) => a + b, 0) / Math.max(1, s.length);
-    // Qualitative labels
-    const eLabel =
-      eAvg < 0.33 ? "low" : eAvg < 0.66 ? "moderate" : "high";
-    const sLabel =
-      sAvg < 0.20 ? "few" : sAvg < 0.55 ? "intermittent" : "frequent";
-    return { eAvg, sAvg, eLabel, sLabel };
-  }
-
-  const A1 = summarize(acts[0].range as [number, number]);
-  const A2 = summarize(acts[1].range as [number, number]);
-  const A3 = summarize(acts[2].range as [number, number]);
-
+function fallbackRequest(): SunoRequest {
   return {
-    acts: [
-      { idx: 1, ...A1 },
-      { idx: 2, ...A2 },
-      { idx: 3, ...A3 },
-    ],
+    prompt:
+      "Begin balanced and medium-energy, rise briefly to bright high-energy tones, then fade through controlled glitches into a dark, calm ending. Keep transitions seamless and cohesive.",
+    customMode: true,
+    instrumental: true,
+    model: "V3_5",
+    style: "Orchestra",
+    title: "Mycelium Echoes",
+    styleWeight: 1,
+    weirdnessConstraint: 0.05,
+    negativeTags: "percussion, drums, kicks, clap,vocals",
   };
 }
 
-// ---------- MAIN: map long signal → SunoRequest ----------
+function describeWindow(window: ClassifiedWindow): string {
+  const index = window.index + 1;
+  const layers =
+    window.audio.layers === 1
+      ? "1 soft layer"
+      : `${window.audio.layers} evolving layers`;
+  const brightness =
+    window.audio.brightness === "dark"
+      ? "dark tone"
+      : window.audio.brightness === "balanced"
+        ? "balanced tone"
+        : "brighter tone";
+  const peakSuffix = window.peak ? " Peak energy: add gentle shimmer, not loudness." : "";
+  const modulation = window.audio.modulationDescription.replace(/\.$/, "");
+  const glitch = window.audio.glitchAmount <= 0.05
+    ? "almost no glitch accents"
+    : window.audio.glitchAmount <= 0.25
+      ? "light glitch accents"
+      : "controlled glitch accents";
 
-// Target ~2 minutes. We map one bin ≈ one "second" of musical evolution.
-const TARGET_DURATION_SEC = 120;
-const BINS = TARGET_DURATION_SEC; // 120 bins ≈ 2 minutes of macro-shape
+  return (
+    `Window ${index} (${window.combinedLabel}): ${layers} with a ${brightness}. ` +
+    `${modulation}. Use ${glitch}.` +
+    peakSuffix
+  );
+}
 
-export function mapSignalToSuno(signal: number[]): SunoRequest {
-  // 1) Clean the input
-  const clean = signal
-    .map(v => Number.isFinite(v) ? v : 0)
-    .filter(v => !Number.isNaN(v));
-
-  // Safety fallback
-  if (clean.length === 0) {
-    return {
-      prompt: "A mysterious sci-fi ambient instrumental, gentle and evolving.",
-      customMode: true,
-      instrumental: true,
-      style: "mysterious sci-fi ambient",
-      title: "Mycelium Echoes",
-      model: "V5",
-      styleWeight: 0.75,
-      weirdnessConstraint: 0.35,
-      negativeTags: "no drums, no vocals, no harsh noise",
-    };
+export function mapSignalToSuno(analysis: SignalWindowsAnalysis | null): SunoRequest {
+  if (!analysis || !analysis.windows.length) {
+    return fallbackRequest();
   }
 
-  // 2) Compress to ~120 bins so the whole day fits ~2 minutes
-  const b = binCompress(clean, BINS);
+  const { windows, globalStats } = analysis;
 
-  // 3) Extract features per bin
-  const { energy, spikes } = featuresPerBin(b);
+  const maxLayers = Math.max(...windows.map((w) => w.audio.layers));
+  const maxModDepth = Math.max(...windows.map((w) => w.audio.modulationDepth));
+  const hasPeak = windows.some((w) => w.peak);
 
-  // 4) Build a simple 3-act storyline from features
-  const { acts } = makeActs(energy, spikes);
+  const summary =
+    `Global baseline average ${globalStats.average.toFixed(3)} mV, standard deviation ${globalStats.stdDev.toFixed(3)} mV. ` +
+    `Use up to ${maxLayers} layered synth voices with evolving textures. ` +
+    `Keep modulation depth under ${Math.round(maxModDepth * 100)}% and avoid percussion entirely. ` +
+    `${hasPeak ? "When peak windows appear, signal them with extra shimmer or subtle harmonic lift instead of volume spikes. " : ""}` +
+    `Transitions must remain smooth—no abrupt cuts or chaotic jumps.`;
 
-  // 5) Global stats for flavor text
-  const eAvgAll = energy.reduce((a, x) => a + x, 0) / energy.length;
-  const sAvgAll = spikes.reduce((a, x) => a + x, 0) / spikes.length;
+  const windowNarrative = windows.map(describeWindow).join(" ");
 
-  // 6) Translate to musical direction (words Suno responds well to)
-  //    We keep it instrumental & mysterious sci-fi as requested.
-  const overallMood =
-    eAvgAll < 0.33 ? "deep and minimal" :
-    eAvgAll < 0.66 ? "subtly pulsing" : "tense and vivid";
+  const finalWindow = windows.at(-1);
+  const finalNote = finalWindow
+    ? `Final window (${windows.length}) settles into ${finalWindow.combinedLabel}; let the piece conclude with ${finalWindow.audio.layers === 1 ? "one gentle layer" : `${finalWindow.audio.layers} restrained layers`} and keep modulation ${finalWindow.audio.modulationDescription.toLowerCase()}.`
+    : "";
 
-  const spikeFlavor =
-    sAvgAll < 0.2 ? "rare glints" :
-    sAvgAll < 0.55 ? "intermittent flares" : "frequent glitchy bursts";
+  // const prompt =
+  //   `Compose a minimal, percussion-free sci-fi ambient piece close to two minutes long. ` +
+  //   `${summary} ${windowNarrative} ${finalNote} ` +
+  //   `No drums, kicks, claps, or harsh noise. Maintain a cohesive flow throughout.`;
 
-  // Per-act descriptors
-  function actLine(i: number, eLabel: string, sLabel: string) {
-    const startWords = i === 1 ? "Begin" : i === 2 ? "Evolve" : "Resolve";
-    const eWord = eLabel === "low" ? "low-energy drones"
-      : eLabel === "moderate" ? "broader textures"
-      : "pressurized swells";
-    const sWord = sLabel === "few" ? "subtle sparkles"
-      : sLabel === "intermittent" ? "occasional spike accents"
-      : "frequent glitch accents";
-    return `${startWords} with ${eWord} and ${sWord}.`;
-  }
-
-  const actText = [
-    actLine(1, acts[0].eLabel, acts[0].sLabel),
-    actLine(2, acts[1].eLabel, acts[1].sLabel),
-    actLine(3, acts[2].eLabel, acts[2].sLabel),
-  ].join(" ");
-
-  // 7) Final Suno request (instrumental, customMode=true, V4_5 for length)
+//   const prompt = `2-minute instrumental Mushroom Status Report. No vocals or percussion. Tempo follows energy: low = 60 BPM, medium = 75 BPM, high = 95 BPM.
+// Begin medium-stable with 2 calm synth layers. Build to high-stable—3 bright evolving synths, faster tempo but minimal modulation (<65%). Shift to medium-spiking, same tempo with brief controlled glitch accents. Conclude in low-stable—1 soft layer, slow tempo, long reverb fade. Keep transitions seamless; flow must evolve naturally without sections or breaks. Sci-fi ambient tone, smooth and cohesive throughout.`
+const prompt = `2-minute orchestral instrumental Mushroom Status Report. No vocals or percussion. Tempo follows energy: low = 60 BPM, medium = 75 BPM, high = 95 BPM. Start medium-stable with soft strings and woodwinds. Gradually build to high-stable where trumpets enter—bright, strong, and clear to show peak energy. Shift into medium-spiking with controlled brass swells and brief woodwind flutters. Conclude low-stable with only strings and gentle horns fading slowly, no trumpet. Keep all transitions seamless; energy is expressed only by trumpet loudness and orchestral brightness. Maintain a smooth, cinematic sci-fi atmosphere—strict 2-minute continuous evolution, no breaks or sections.`
+  console.log(prompt)
   return {
     customMode: true,
     instrumental: true,
     model: "V5",
-    style: "synthwave mysterious sci-fi ambient",
+    style: "Synthwave cyberpunk",
     title: "Ghost Fungi Transmission",
-    styleWeight: 0.8,
-    weirdnessConstraint: 0.35,
-    negativeTags: "no drums, no vocals, no heavy distortion",
-
-    // The prompt steers the length & macro-shape.
-    // Suno doesn’t take an explicit 'duration' param; we ask for ~2 minutes.
-    prompt:
-      `Approximately 2-minute instrumental, ${overallMood}, with ${spikeFlavor}. ` +
-      `Textural, evolving sound design; no percussion kits. ` +
-      `Three-act arc reflecting bioelectric activity: ${actText} ` +
-      `Use analog-sounding synths, resonant drones, spectral pads, and soft granular flickers. ` +
-      `Keep it mysterious and sci-fi; cohesive, not chaotic.`,
+    styleWeight: 1,
+    weirdnessConstraint: 0.05,
+    negativeTags: "percussion, drums,kicks, clap, harsh noise",
+    prompt,
   };
 }

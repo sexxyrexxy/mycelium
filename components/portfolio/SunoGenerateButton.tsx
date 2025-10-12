@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import type { SignalWindowsAnalysis } from "@/lib/signalClassification";
 import { mapSignalToSuno } from "./sonification/sonify";
 
 type SunoDataTrack = {
@@ -15,11 +16,7 @@ type SunoStatusResponse = {
   response?: { sunoData?: SunoDataTrack[] };
 };
 
-export default function SunoGenerateButton({
-  signal,
-}: {
-  signal: number[]; // pass your processed mushroom signal here
-}) {
+export default function SunoGenerateButton({ analysis }: { analysis: SignalWindowsAnalysis | null }) {
   const [taskId, setTaskId] = useState<string | null>(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +25,16 @@ export default function SunoGenerateButton({
 
   async function start() {
     setError(null);
+    if (!analysis || !analysis.windows.length) {
+      setStatus("error");
+      setError("No classified signal windows available.");
+      return;
+    }
     setStatus("starting");
     setStreamUrl(null);
     setFullUrl(null);
 
-    const body = mapSignalToSuno(signal); // ← your mapping from sonify.ts
+    const body = mapSignalToSuno(analysis);
 
     const res = await fetch("/api/suno/generate", {
       method: "POST",
@@ -78,7 +80,11 @@ export default function SunoGenerateButton({
 
   return (
     <div className="grid gap-2">
-      <button onClick={start} className="rounded-xl px-4 py-2 bg-black text-white">
+      <button
+        onClick={start}
+        disabled={!analysis || !analysis.windows.length || status === "starting"}
+        className="rounded-xl px-4 py-2 bg-black text-white disabled:opacity-50"
+      >
         Generate music from this signal
       </button>
       <small>Status: {status}</small>
