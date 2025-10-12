@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 // ---- CONFIG ----
 const PROJECT_ID = "mycelium-470904";
 const DATASET_ID = "MushroomData";
-const DETAILS_TABLE = "TEST_Details";
-const SIGNALS_TABLE = "TEST_Signal";
+const DETAILS_TABLE = "Mushroom_Details";
+const SIGNALS_TABLE = "Mushroom_Signal";
 const LOCATION = "australia-southeast1";
 const KEY_FILE = "mycelium-470904-5621723dfeff.json";
 const PUBSUB_TOPIC = "bigquery-signal-stream"; 
