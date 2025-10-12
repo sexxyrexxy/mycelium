@@ -1,246 +1,216 @@
 // components/portfolio/sonification/sonify.ts
-// CSV → C-major piano sonification (Tone.Player anchors, voice pool, streaming scheduler).
 
-import * as Tone from "tone";
+// ---------- Types ----------
 
-export type LoadSummary = { rows: number; tStart: number; tEnd: number; vMin: number; vMax: number };
-export type PianoOptions = {
-  timeCompression?: number;  // 1 = realtime; >1 = faster
-  smoothingWindow?: number;  // moving average window
-  stepRateHz?: number;       // steps/sec before compression
-  scaleMidiLow?: number;     // 48=C3
-  scaleMidiHigh?: number;    // 84=C6
-  velocity?: number;         // 0..1
-  noteLenSec?: number;       // note length before compression
-  reverbWet?: number;        // 0..1
-  maxNotes?: number;         // optional cap
+export type SunoRequest = {
+  prompt: string;
+  customMode: boolean;
+  instrumental: boolean;
+  model: "V4_5" | "V3_5" | "V4" | "V5";
+  title?: string;
+  style?: string;
+  styleWeight?: number;          // 0..1
+  weirdnessConstraint?: number;  // 0..1 (higher = weirder)
+  negativeTags?: string;
 };
 
-/* -------------------- small helpers -------------------- */
-const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
-const mapLin = (v: number, inMin: number, inMax: number, outMin: number, outMax: number) =>
-  outMin + ((v - inMin) / Math.max(1e-9, inMax - inMin)) * (outMax - outMin);
-const stripBOM = (s: string) => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
-const detectDelimiter = (l: string) => ((l.match(/\t/g) || []).length > (l.match(/,/g) || []).length ? "\t" : ",");
-const parseHHMMSS = (s: string) => {
-  const [hh, mm, ss] = String(s).trim().split(":");
-  if (mm === undefined) return NaN;
-  return (parseInt(hh || "0") || 0) * 3600 + (parseInt(mm || "0") || 0) * 60 + (parseFloat(ss || "0") || 0);
-};
-const movingAverage = (arr: number[], win = 5) => {
-  if (win <= 1) return arr.slice();
-  const out = new Array<number>(arr.length);
-  let sum = 0;
-  for (let i = 0; i < arr.length; i++) { sum += arr[i]; if (i >= win) sum -= arr[i - win]; out[i] = sum / Math.min(i + 1, win); }
+// ---------- Helpers: basic stats ----------
+
+function clamp01(x: number) { return Math.min(1, Math.max(0, x)); }
+
+function meanAbs(arr: number[]) {
+  if (arr.length === 0) return 0;
+  let s = 0;
+  for (const v of arr) s += Math.abs(v);
+  return s / arr.length;
+}
+
+function std(arr: number[]) {
+  if (arr.length < 2) return 0;
+  const m = arr.reduce((a, b) => a + b, 0) / arr.length;
+  let v = 0;
+  for (const x of arr) v += (x - m) * (x - m);
+  return Math.sqrt(v / (arr.length - 1));
+}
+
+function diff(arr: number[]) {
+  const out: number[] = [];
+  for (let i = 1; i < arr.length; i++) out.push(arr[i] - arr[i - 1]);
   return out;
-};
-const normalizeCentered = (arr: number[]) => {
-  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
-  const c = arr.map((v) => v - mean);
-  const peak = Math.max(1e-9, ...c.map((v) => Math.abs(v)));
-  return c.map((v) => v / peak);
-};
-const downsample = (times: number[], values: number[], hz = 100) => {
-  const T: number[] = [], V: number[] = [];
-  if (!times.length) return { times: T, values: V };
-  const dt = 1 / hz; let next = times[0];
-  for (let i = 0; i < times.length - 1; i++) {
-    const t1 = times[i], t2 = times[i + 1], v1 = values[i], v2 = values[i + 1];
-    while (next >= t1 && next < t2) { const a = (next - t1) / Math.max(1e-9, t2 - t1); T.push(next); V.push((1 - a) * v1 + a * v2); next += dt; }
-  }
-  T.push(times.at(-1)!); V.push(values.at(-1)!); return { times: T, values: V };
-};
-const buildScaleMidi = (low: number, high: number, deg = [0, 2, 4, 5, 7, 9, 11]) => {
-  const out: number[] = []; for (let m = low; m <= high; m++) if (deg.includes(m % 12)) out.push(m); return out;
-};
-
-/* -------------------- module state -------------------- */
-let rawTimesSec: number[] = [];
-let rawVolts: number[] = [];
-
-type Anchor = { midi: number; name: string; players: Tone.Player[]; offsetSec: number; rr: number };
-let anchors: Anchor[] | null = null;
-let pianoReverb: Tone.Reverb | null = null;
-let pianoComp: Tone.Compressor | null = null;
-let pianoLimiter: Tone.Limiter | null = null;
-
-/* streaming scheduler */
-let streamTimer: number | null = null;
-let streamIdx = 0;
-let streamStartAt = 0;
-let streamStepSec = 0.25;
-let streamDurSec = 0.25;
-let streamSeqMidi: number[] = [];
-
-/* -------------------- CSV loader -------------------- */
-export async function loadCsv(csvUrl: string): Promise<LoadSummary> {
-  const res = await fetch(encodeURI(csvUrl), { cache: "no-store" });
-  if (!res.ok) throw new Error(`Failed to fetch CSV: ${res.status}`);
-  const text = stripBOM(await res.text());
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (lines.length < 2) throw new Error("CSV appears empty");
-
-  const delim = detectDelimiter(lines[0]);
-  const header = lines[0].split(delim).map((s) => s.trim());
-  const rows = lines.slice(1).map((l) => l.split(delim));
-
-  let valIdx = header.findIndex((h) => /^signal\s*mv$/i.test(h));
-  if (valIdx < 0) valIdx = Math.max(0, (header.length || rows[0]?.length || 1) - 1);
-
-  let timeIdx = -1;
-  if (!header[0]) {
-    const looksLike = rows.slice(0, 5).every((r) => r[0] && r[0].includes(":"));
-    if (looksLike) timeIdx = 0;
-  }
-  if (timeIdx < 0) {
-    const guess = header.findIndex((h) => /^(unnamed:\s*0|time|time_s|timestamp)$/i.test(h));
-    if (guess >= 0) timeIdx = guess;
-  }
-  if (timeIdx < 0 && (header.length >= 2 || rows[0]?.length >= 2)) timeIdx = 0;
-  if (timeIdx < 0 || valIdx < 0) throw new Error(`Could not find time/value columns. Saw headers: ${header.join(" | ")}`);
-
-  const t: number[] = [], v: number[] = [];
-  for (const r of rows) {
-    const ts = (r[timeIdx] ?? "").trim(), vs = (r[valIdx] ?? "").trim();
-    if (!ts || !vs) continue;
-    const T = parseHHMMSS(ts), V = parseFloat(vs);
-    if (!Number.isFinite(T) || !Number.isFinite(V)) continue;
-    if (t.length && T < t.at(-1)!) continue;
-    t.push(T); v.push(V);
-  }
-  if (t.length < 2) throw new Error("Not enough valid rows after parsing.");
-
-  rawTimesSec = t; rawVolts = v;
-  return { rows: t.length, tStart: t[0], tEnd: t.at(-1)!, vMin: Math.min(...v), vMax: Math.max(...v) };
 }
 
-/* -------------------- audio setup -------------------- */
-const AUDIO_BASE = "/sounds/";     // adjust if needed
-const VOICES = 6;                  // polyphony per anchor
-const FADE_IN = 0.01, FADE_OUT = 0.06;
+// Downsample/compress into fixed number of bins by averaging blocks.
+// Works well when your timestamps are ~1Hz (your CSVs are).
+function binCompress(signal: number[], bins: number): number[] {
+  const N = signal.length;
+  if (N <= bins) return signal.slice(); // already short; let Suno reflect the micro-variation
+  const size = N / bins;
+  const out: number[] = new Array(bins);
+  for (let i = 0; i < bins; i++) {
+    const start = Math.floor(i * size);
+    const end = Math.min(N, Math.floor((i + 1) * size));
+    if (end <= start) { out[i] = signal[Math.min(start, N - 1)] ?? 0; continue; }
+    let sum = 0; let c = 0;
+    for (let j = start; j < end; j++) { sum += signal[j]; c++; }
+    out[i] = c ? sum / c : 0;
+  }
+  return out;
+}
 
-async function setupPianoIfNeeded() {
-  if (anchors) return;
-  const files = [
-    { midi: 60, name: "C4", url: AUDIO_BASE + "C4.mp3", offsetSec: 1.0 },
-    { midi: 64, name: "E4", url: AUDIO_BASE + "E4.mp3", offsetSec: 1.0 },
-    { midi: 67, name: "G4", url: AUDIO_BASE + "G4.mp3", offsetSec: 1.0 },
-    { midi: 72, name: "C5", url: AUDIO_BASE + "C5.mp3", offsetSec: 1.0 },
-  ];
+// Compute bin-wise features for structure mapping
+function featuresPerBin(binned: number[]) {
+  // Energy proxy: mean absolute value per bin (already averaged)
+  // Spike density: count(|Δ| > threshold) in a small window approximation.
+  const diffs = diff(binned);
+  const dStd = std(diffs) || 1e-6;
+  const spikeThresh = 2.0 * dStd; // "big jump" threshold ≈ 2σ
 
-  pianoReverb  = new Tone.Reverb({ decay: 2.5, wet: 0.2 });
-  pianoComp    = new Tone.Compressor({ threshold: -14, ratio: 2, attack: 0.01, release: 0.2 });
-  pianoLimiter = new Tone.Limiter(-6);
+  const energy: number[] = [];
+  const spikes: number[] = [];
 
-  anchors = [];
-  for (const f of files) {
-    const players: Tone.Player[] = [];
-    const url = encodeURI(f.url);
-    for (let i = 0; i < VOICES; i++) {
-      const p = new Tone.Player(url);
-      p.autostart = false; p.fadeIn = FADE_IN; p.fadeOut = FADE_OUT;
-      p.chain(pianoReverb!, pianoComp!, pianoLimiter!, Tone.Destination);
-      await p.load(url);
-      players.push(p);
+  // For each bin, approximate local energy & spikes from neighbors
+  for (let i = 0; i < binned.length; i++) {
+    const window = binned.slice(Math.max(0, i - 2), Math.min(binned.length, i + 3));
+    energy.push(meanAbs(window));
+    let s = 0;
+    for (let k = Math.max(0, i - 2); k < Math.min(binned.length - 1, i + 3); k++) {
+      if (Math.abs(binned[k + 1] - binned[k]) > spikeThresh) s++;
     }
-    anchors.push({ midi: f.midi, name: f.name, players, offsetSec: f.offsetSec, rr: 0 });
+    spikes.push(s);
   }
+
+  // Normalize features to 0..1 for easier language mapping
+  const eMax = Math.max(...energy, 1e-6);
+  const sMax = Math.max(...spikes, 1e-6);
+  const eNorm = energy.map(v => v / eMax);
+  const sNorm = spikes.map(v => v / sMax);
+
+  return { energy: eNorm, spikes: sNorm };
 }
 
-const pickNearestAnchor = (midi: number) => {
-  if (!anchors?.length) throw new Error("Anchors not loaded");
-  return anchors.reduce((b, a) => (Math.abs(midi - a.midi) < Math.abs(midi - b.midi) ? a : b), anchors[0]);
-};
-const nextVoice = (a: Anchor) => a.players[(a.rr++) % a.players.length];
+// Partition into 3 acts based on median energy trend; emphasize where spikes cluster.
+function makeActs(energy: number[], spikes: number[]) {
+  const n = energy.length;
+  const A = Math.floor(n / 3), B = Math.floor((2 * n) / 3);
 
-function safeStartVoice(voice: Tone.Player, offset: number, rate: number, tPlay: number, wantDur: number) {
-  const durBuf = voice.buffer?.duration ?? 0;
-  const maxDur = rate > 0 ? Math.max(0, (durBuf - offset) / rate) : 0;
-  const dur = Math.min(wantDur, Math.max(0, maxDur - 0.005));
-  if (dur <= 0) return false;
-  voice.start(tPlay, offset, dur); return true;
-}
+  const acts = [
+    { name: "Act I",  range: [0, A] },
+    { name: "Act II", range: [A, B] },
+    { name: "Act III",range: [B, n] },
+  ] as const;
 
-/* -------------------- streaming scheduler -------------------- */
-function stopStream() {
-  if (streamTimer != null) { window.clearInterval(streamTimer); streamTimer = null; }
-  streamIdx = 0; streamSeqMidi = [];
-}
-function scheduleOne(i: number, tPlay: number, velDb: number) {
-  const a = pickNearestAnchor(streamSeqMidi[i]);
-  const semis = streamSeqMidi[i] - a.midi;
-  const rate = Math.pow(2, semis / 12);
-  const v = nextVoice(a);
-  v.playbackRate = rate; v.volume.value = velDb;
-  safeStartVoice(v, a.offsetSec, rate, tPlay, streamDurSec);
-}
-function startStream(seq: number[], startAt: number, stepSec: number, durSec: number, velDb: number) {
-  stopStream();
-  streamSeqMidi = seq; streamStartAt = startAt; streamStepSec = stepSec; streamDurSec = durSec;
-
-  const WINDOW = 2.0, TICK = 150; // seconds, ms
-  const prime = Math.min(8, seq.length);
-  for (let j = 0; j < prime; j++) scheduleOne(j, startAt + j * stepSec, velDb);
-  streamIdx = prime;
-
-  streamTimer = window.setInterval(() => {
-    const now = Tone.now(), horizon = now + WINDOW;
-    while (streamIdx < seq.length) {
-      const tPlay = startAt + streamIdx * stepSec;
-      if (tPlay > horizon) break;
-      scheduleOne(streamIdx, tPlay, velDb);
-      streamIdx++;
-    }
-    if (streamIdx >= seq.length) stopStream();
-  }, TICK);
-}
-
-/* -------------------- public API -------------------- */
-export async function startPiano(opts: PianoOptions = {}) {
-  if (!rawTimesSec.length) throw new Error("Call loadCsv() first.");
-
-  const {
-    timeCompression = 1,
-    smoothingWindow = 7,
-    stepRateHz = 2,
-    scaleMidiLow = 48,
-    scaleMidiHigh = 84,
-    velocity = 0.85,
-    noteLenSec = 0.30,
-    reverbWet = 0.2,
-    maxNotes,
-  } = opts;
-
-  await Tone.start();
-  const ctx = Tone.getContext().rawContext; if (ctx.state !== "running") await ctx.resume();
-  Tone.getContext().lookAhead = 0.08;
-
-  await setupPianoIfNeeded();
-  if (pianoReverb) { (pianoReverb as any).preDelay = 0; pianoReverb.wet.value = reverbWet; }
-
-  // preprocess → normalized values
-  const norm = normalizeCentered(movingAverage(rawVolts, smoothingWindow));
-  const { values } = downsample(rawTimesSec, norm, stepRateHz);
-  if (values.length < 2) throw new Error("Not enough points after resampling.");
-
-  // ✅ Correct mapping: value (-1..1) → index → C-major MIDI note
-  const scale = buildScaleMidi(scaleMidiLow, scaleMidiHigh);
-  const seqAll: number[] = new Array(values.length);
-  for (let i = 0; i < values.length; i++) {
-    const idx = clamp(Math.round(mapLin(values[i], -1, 1, 0, scale.length - 1)), 0, scale.length - 1);
-    seqAll[i] = scale[idx];
+  function summarize([lo, hi]: [number, number]) {
+    const e = energy.slice(lo, hi);
+    const s = spikes.slice(lo, hi);
+    const eAvg = e.reduce((a, b) => a + b, 0) / Math.max(1, e.length);
+    const sAvg = s.reduce((a, b) => a + b, 0) / Math.max(1, s.length);
+    // Qualitative labels
+    const eLabel =
+      eAvg < 0.33 ? "low" : eAvg < 0.66 ? "moderate" : "high";
+    const sLabel =
+      sAvg < 0.20 ? "few" : sAvg < 0.55 ? "intermittent" : "frequent";
+    return { eAvg, sAvg, eLabel, sLabel };
   }
-  const seq = maxNotes ? seqAll.slice(0, maxNotes) : seqAll;
 
-  const startAt = Tone.now() + 0.08;
-  const stepSec = Math.max(0.25, 1 / stepRateHz / Math.max(1, timeCompression));
-  const durSec  = Math.max(0.25, noteLenSec / Math.max(1, timeCompression));
-  const velDb   = Tone.gainToDb(clamp(velocity, 0, 0.9));
+  const A1 = summarize(acts[0].range as [number, number]);
+  const A2 = summarize(acts[1].range as [number, number]);
+  const A3 = summarize(acts[2].range as [number, number]);
 
-  startStream(seq, startAt, stepSec, durSec, velDb);
+  return {
+    acts: [
+      { idx: 1, ...A1 },
+      { idx: 2, ...A2 },
+      { idx: 3, ...A3 },
+    ],
+  };
 }
 
-export function stopPiano() {
-  stopStream();
-  try { anchors?.forEach((a) => a.players.forEach((p) => p.stop())); } catch {}
+// ---------- MAIN: map long signal → SunoRequest ----------
+
+// Target ~2 minutes. We map one bin ≈ one "second" of musical evolution.
+const TARGET_DURATION_SEC = 120;
+const BINS = TARGET_DURATION_SEC; // 120 bins ≈ 2 minutes of macro-shape
+
+export function mapSignalToSuno(signal: number[]): SunoRequest {
+  // 1) Clean the input
+  const clean = signal
+    .map(v => Number.isFinite(v) ? v : 0)
+    .filter(v => !Number.isNaN(v));
+
+  // Safety fallback
+  if (clean.length === 0) {
+    return {
+      prompt: "A mysterious sci-fi ambient instrumental, gentle and evolving.",
+      customMode: true,
+      instrumental: true,
+      style: "mysterious sci-fi ambient",
+      title: "Mycelium Echoes",
+      model: "V5",
+      styleWeight: 0.75,
+      weirdnessConstraint: 0.35,
+      negativeTags: "no drums, no vocals, no harsh noise",
+    };
+  }
+
+  // 2) Compress to ~120 bins so the whole day fits ~2 minutes
+  const b = binCompress(clean, BINS);
+
+  // 3) Extract features per bin
+  const { energy, spikes } = featuresPerBin(b);
+
+  // 4) Build a simple 3-act storyline from features
+  const { acts } = makeActs(energy, spikes);
+
+  // 5) Global stats for flavor text
+  const eAvgAll = energy.reduce((a, x) => a + x, 0) / energy.length;
+  const sAvgAll = spikes.reduce((a, x) => a + x, 0) / spikes.length;
+
+  // 6) Translate to musical direction (words Suno responds well to)
+  //    We keep it instrumental & mysterious sci-fi as requested.
+  const overallMood =
+    eAvgAll < 0.33 ? "deep and minimal" :
+    eAvgAll < 0.66 ? "subtly pulsing" : "tense and vivid";
+
+  const spikeFlavor =
+    sAvgAll < 0.2 ? "rare glints" :
+    sAvgAll < 0.55 ? "intermittent flares" : "frequent glitchy bursts";
+
+  // Per-act descriptors
+  function actLine(i: number, eLabel: string, sLabel: string) {
+    const startWords = i === 1 ? "Begin" : i === 2 ? "Evolve" : "Resolve";
+    const eWord = eLabel === "low" ? "low-energy drones"
+      : eLabel === "moderate" ? "broader textures"
+      : "pressurized swells";
+    const sWord = sLabel === "few" ? "subtle sparkles"
+      : sLabel === "intermittent" ? "occasional spike accents"
+      : "frequent glitch accents";
+    return `${startWords} with ${eWord} and ${sWord}.`;
+  }
+
+  const actText = [
+    actLine(1, acts[0].eLabel, acts[0].sLabel),
+    actLine(2, acts[1].eLabel, acts[1].sLabel),
+    actLine(3, acts[2].eLabel, acts[2].sLabel),
+  ].join(" ");
+
+  // 7) Final Suno request (instrumental, customMode=true, V4_5 for length)
+  return {
+    customMode: true,
+    instrumental: true,
+    model: "V5",
+    style: "synthwave mysterious sci-fi ambient",
+    title: "Ghost Fungi Transmission",
+    styleWeight: 0.8,
+    weirdnessConstraint: 0.35,
+    negativeTags: "no drums, no vocals, no heavy distortion",
+
+    // The prompt steers the length & macro-shape.
+    // Suno doesn’t take an explicit 'duration' param; we ask for ~2 minutes.
+    prompt:
+      `Approximately 2-minute instrumental, ${overallMood}, with ${spikeFlavor}. ` +
+      `Textural, evolving sound design; no percussion kits. ` +
+      `Three-act arc reflecting bioelectric activity: ${actText} ` +
+      `Use analog-sounding synths, resonant drones, spectral pads, and soft granular flickers. ` +
+      `Keep it mysterious and sci-fi; cohesive, not chaotic.`,
+  };
 }
