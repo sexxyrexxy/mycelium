@@ -1,8 +1,8 @@
+// components/portfolio/sonification/SonificationPanel.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { loadCsv, startPiano, stopPiano } from '@/components/portfolio/sonification/sonify';
 
 type Props = { csvUrl?: string };
 
@@ -10,7 +10,6 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Global unlock fallback: resume context on first interaction anywhere
   useEffect(() => {
     const handler = async () => {
       try {
@@ -18,7 +17,9 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
         await Tone.start();
         const ctx = Tone.getContext().rawContext;
         if (ctx.state !== 'running') await ctx.resume();
-      } catch {}
+      } catch (e) {
+        console.error('Audio context unlock failed', e);
+      }
       window.removeEventListener('pointerdown', handler as any, true);
       window.removeEventListener('keydown', handler as any, true);
     };
@@ -30,52 +31,56 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
     };
   }, []);
 
-  // Stop any scheduled audio when the component unmounts
   useEffect(() => {
     return () => {
-      try { stopPiano(); } catch {}
+      (async () => {
+        try {
+          const mod = await import('@/components/portfolio/sonification/sonify');
+          if (typeof mod.stopAll === 'function') mod.stopAll();
+        } catch (e) {
+          console.error('Failed to stop audio on unmount', e);
+        }
+      })();
     };
   }, []);
 
-  const onStart = async () => {
+  const ensureLoaded = async () => {
+    const Tone = await import('tone');
+    await Tone.start();
+    const ctx = Tone.getContext().rawContext;
+    if (ctx.state !== 'running') await ctx.resume();
+    Tone.getContext().lookAhead = 0.02;
+
+    if (!loaded) {
+      const { loadCsv } = await import('@/components/portfolio/sonification/sonify');
+      const summary = await loadCsv(csvUrl);
+      console.log('CSV summary:', summary);
+      setLoaded(true);
+    }
+  };
+
+  const runEngine = async (
+    key: 'startPiano' | 'startAmbient' | 'startChoir',
+    args: any
+  ) => {
     if (busy) return;
     setBusy(true);
     try {
-      // Import Tone only on user click to avoid autoplay warnings on page load
-      const Tone = await import('tone');
-      await Tone.start();
-      const ctx = Tone.getContext().rawContext;
-      if (ctx.state !== 'running') await ctx.resume();
-      // Snappier first note
-      Tone.getContext().lookAhead = 0.02;
-
-      // Load the CSV once
-      if (!loaded) {
-        const summary = await loadCsv(csvUrl);
-        console.log('CSV summary:', summary);
-        setLoaded(true);
+      await ensureLoaded();
+      const mod = await import('@/components/portfolio/sonification/sonify');
+      const fn = (mod as any)[key];
+      if (typeof fn !== 'function') {
+        console.error('Available exports:', mod);
+        alert(`${key} is not available. Check sonify.ts exports.`);
+        return;
       }
-
-      // Start piano sonification with sane defaults (audible notes)
-      await startPiano({
-        timeCompression: 5,
-        smoothingWindow: 5,
-        stepRateHz: 3,
-        scaleMidiLow: 48,   // C3
-        scaleMidiHigh: 84,  // C6
-        velocity: 0.9,
-        noteLenSec: 0.25,
-        reverbWet: 0.2,
-      });
+      await fn(args);
     } catch (e: any) {
+      console.error(e);
       alert(`Failed: ${e?.message || e}`);
     } finally {
       setBusy(false);
     }
-  };
-
-  const onStop = () => {
-    try { stopPiano(); } catch {}
   };
 
   return (
@@ -85,18 +90,65 @@ export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Play the mushroom’s electrical signals as a piano. Source: <code>{csvUrl}</code>
+          Play the mushroom’s electrical signals with different engines. Source:{' '}
+          <code>{csvUrl}</code>
         </p>
+
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={onStart}
+            onClick={() =>
+              runEngine('startPiano', {
+                timeCompression: 3,
+                smoothingWindow: 5,
+                stepRateHz: 2.0,
+                scaleMidiLow: 48,
+                scaleMidiHigh: 84,
+              })
+            }
             className="px-3 py-1.5 rounded-md bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
             disabled={busy}
           >
-            {busy ? 'Starting…' : 'Start'}
+            Piano
           </button>
+
           <button
-            onClick={onStop}
+            onClick={() =>
+              runEngine('startAmbient', {
+                timeCompression: 3,
+                smoothingWindow: 7,
+                stepRateHz: 3,
+                velocity: 0.6,
+              })
+            }
+            className="px-3 py-1.5 rounded-md bg-purple-500 text-white hover:bg-purple-600 disabled:opacity-50"
+            disabled={busy}
+          >
+            Ambient
+          </button>
+
+          <button
+            onClick={() =>
+              runEngine('startChoir', {
+                smoothingWindow: 5,
+                stepRateHz: 2,
+                timeCompression: 1,
+              })
+            }
+            className="px-3 py-1.5 rounded-md bg-sky-600 text-white hover:bg-sky-700 disabled:opacity-50"
+            disabled={busy}
+          >
+            Choir
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                const mod = await import('@/components/portfolio/sonification/sonify');
+                if (typeof mod.stopAll === 'function') mod.stopAll();
+              } catch (e) {
+                console.error('Stop failed', e);
+              }
+            }}
             className="px-3 py-1.5 rounded-md bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
             disabled={busy}
           >

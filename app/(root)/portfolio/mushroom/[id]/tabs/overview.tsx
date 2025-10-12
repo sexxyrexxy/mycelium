@@ -233,7 +233,7 @@ export default function Overview() {
           </Card>
 
           <main className="space-y-6">
-            <SonificationPanel csvUrl="/GhostFungi.csv" />
+            <SonificationPanel csvUrl="/MushroomData1.csv" />
           </main>
         </div>
       </div>

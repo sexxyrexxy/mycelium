@@ -1,5 +1,8 @@
 // components/portfolio/sonification/sonify.ts
-// CSV → C-major piano sonification (Tone.Player anchors, voice pool, streaming scheduler).
+// CSV → C-major piano sonification (Tone.Player anchors, voice pool, streaming scheduler)
+// + ambient FM pad sonification (simple)
+// + choir pad sonification (streamed chunks, envelopes, limiter)
+// Piano and Choir engines are fully separated. Piano has a per-note synth fallback if a sample note can't be started.
 
 import * as Tone from "tone";
 
@@ -16,7 +19,7 @@ export type PianoOptions = {
   maxNotes?: number;         // optional cap
 };
 
-/* -------------------- small helpers -------------------- */
+/* -------------------- helpers -------------------- */
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const mapLin = (v: number, inMin: number, inMax: number, outMin: number, outMax: number) =>
   outMin + ((v - inMin) / Math.max(1e-9, inMax - inMin)) * (outMax - outMin);
@@ -35,7 +38,7 @@ const movingAverage = (arr: number[], win = 5) => {
   return out;
 };
 const normalizeCentered = (arr: number[]) => {
-  const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+  const mean = arr.reduce((a, b) => a + b, 0) / Math.max(1, arr.length);
   const c = arr.map((v) => v - mean);
   const peak = Math.max(1e-9, ...c.map((v) => Math.abs(v)));
   return c.map((v) => v / peak);
@@ -53,24 +56,11 @@ const downsample = (times: number[], values: number[], hz = 100) => {
 const buildScaleMidi = (low: number, high: number, deg = [0, 2, 4, 5, 7, 9, 11]) => {
   const out: number[] = []; for (let m = low; m <= high; m++) if (deg.includes(m % 12)) out.push(m); return out;
 };
+const midiToFreq = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 /* -------------------- module state -------------------- */
 let rawTimesSec: number[] = [];
 let rawVolts: number[] = [];
-
-type Anchor = { midi: number; name: string; players: Tone.Player[]; offsetSec: number; rr: number };
-let anchors: Anchor[] | null = null;
-let pianoReverb: Tone.Reverb | null = null;
-let pianoComp: Tone.Compressor | null = null;
-let pianoLimiter: Tone.Limiter | null = null;
-
-/* streaming scheduler */
-let streamTimer: number | null = null;
-let streamIdx = 0;
-let streamStartAt = 0;
-let streamStepSec = 0.25;
-let streamDurSec = 0.25;
-let streamSeqMidi: number[] = [];
 
 /* -------------------- CSV loader -------------------- */
 export async function loadCsv(csvUrl: string): Promise<LoadSummary> {
@@ -97,7 +87,7 @@ export async function loadCsv(csvUrl: string): Promise<LoadSummary> {
     if (guess >= 0) timeIdx = guess;
   }
   if (timeIdx < 0 && (header.length >= 2 || rows[0]?.length >= 2)) timeIdx = 0;
-  if (timeIdx < 0 || valIdx < 0) throw new Error(`Could not find time/value columns. Saw headers: ${header.join(" | ")}`);
+  if (timeIdx < 0 || valIdx < 0) throw new Error(`Could not find time/value columns.`);
 
   const t: number[] = [], v: number[] = [];
   for (const r of rows) {
@@ -114,93 +104,141 @@ export async function loadCsv(csvUrl: string): Promise<LoadSummary> {
   return { rows: t.length, tStart: t[0], tEnd: t.at(-1)!, vMin: Math.min(...v), vMax: Math.max(...v) };
 }
 
-/* -------------------- audio setup -------------------- */
-const AUDIO_BASE = "/sounds/";     // adjust if needed
-const VOICES = 6;                  // polyphony per anchor
-const FADE_IN = 0.01, FADE_OUT = 0.06;
+/* ===================================================================== */
+/* ==================== PIANO ENGINE (old logic + per-note fallback) === */
+/* ===================================================================== */
+const PIANO_AUDIO_BASE = "/sounds/";
+const PIANO_VOICES = 6;
+const PIANO_FADE_IN = 0.01, PIANO_FADE_OUT = 0.06;
+
+type PianoAnchor = { midi: number; name: string; players: Tone.Player[]; offsetSec: number; rr: number };
+
+let pianoAnchors: PianoAnchor[] | null = null;
+let pianoReverb: Tone.Reverb | null = null;
+let pianoComp: Tone.Compressor | null = null;
+let pianoLimiter: Tone.Limiter | null = null;
+
+let pianoTimer: number | null = null;
+let pianoIdx = 0;
+let pianoStartAt = 0;
+let pianoStepSec = 0.25;
+let pianoDurSec = 0.25;
+let pianoSeqMidi: number[] = [];
+
+// Per-note synth fallback — ALWAYS created so any skipped sample still makes sound
+let pianoFallback: Tone.PolySynth | null = null;
 
 async function setupPianoIfNeeded() {
-  if (anchors) return;
+  if (pianoAnchors) return;
+
+  // ensure fallback exists
+  if (!pianoFallback) {
+    pianoFallback = new Tone.PolySynth(Tone.Synth, {
+      envelope: { attack: 0.01, decay: 0.15, sustain: 0.2, release: 0.35 }
+    }).toDestination();
+  }
+
   const files = [
-    { midi: 60, name: "C4", url: AUDIO_BASE + "C4.mp3", offsetSec: 1.0 },
-    { midi: 64, name: "E4", url: AUDIO_BASE + "E4.mp3", offsetSec: 1.0 },
-    { midi: 67, name: "G4", url: AUDIO_BASE + "G4.mp3", offsetSec: 1.0 },
-    { midi: 72, name: "C5", url: AUDIO_BASE + "C5.mp3", offsetSec: 1.0 },
+    { midi: 60, name: "C4", url: PIANO_AUDIO_BASE + "C4.mp3", offsetSec: 1.0 },
+    { midi: 64, name: "E4", url: PIANO_AUDIO_BASE + "E4.mp3", offsetSec: 1.0 },
+    { midi: 67, name: "G4", url: PIANO_AUDIO_BASE + "G4.mp3", offsetSec: 1.0 },
+    { midi: 72, name: "C5", url: PIANO_AUDIO_BASE + "C5.mp3", offsetSec: 1.0 },
   ];
 
   pianoReverb  = new Tone.Reverb({ decay: 2.5, wet: 0.2 });
   pianoComp    = new Tone.Compressor({ threshold: -14, ratio: 2, attack: 0.01, release: 0.2 });
   pianoLimiter = new Tone.Limiter(-6);
 
-  anchors = [];
+  const anchors: PianoAnchor[] = [];
   for (const f of files) {
     const players: Tone.Player[] = [];
     const url = encodeURI(f.url);
-    for (let i = 0; i < VOICES; i++) {
+    for (let i = 0; i < PIANO_VOICES; i++) {
       const p = new Tone.Player(url);
-      p.autostart = false; p.fadeIn = FADE_IN; p.fadeOut = FADE_OUT;
+      p.autostart = false; p.fadeIn = PIANO_FADE_IN; p.fadeOut = PIANO_FADE_OUT;
       p.chain(pianoReverb!, pianoComp!, pianoLimiter!, Tone.Destination);
       await p.load(url);
       players.push(p);
     }
     anchors.push({ midi: f.midi, name: f.name, players, offsetSec: f.offsetSec, rr: 0 });
   }
+  pianoAnchors = anchors;
+  console.log(`[piano] anchors loaded: ${pianoAnchors.length} × ${PIANO_VOICES} voices`);
 }
 
-const pickNearestAnchor = (midi: number) => {
-  if (!anchors?.length) throw new Error("Anchors not loaded");
-  return anchors.reduce((b, a) => (Math.abs(midi - a.midi) < Math.abs(midi - b.midi) ? a : b), anchors[0]);
+const pianoPickNearestAnchor = (midi: number) => {
+  if (!pianoAnchors?.length) throw new Error("[piano] anchors not loaded");
+  return pianoAnchors.reduce((b, a) => (Math.abs(midi - a.midi) < Math.abs(midi - b.midi) ? a : b), pianoAnchors[0]);
 };
-const nextVoice = (a: Anchor) => a.players[(a.rr++) % a.players.length];
+const pianoNextVoice = (a: PianoAnchor) => a.players[(a.rr++) % a.players.length];
 
-function safeStartVoice(voice: Tone.Player, offset: number, rate: number, tPlay: number, wantDur: number) {
+function pianoSafeStartVoice(voice: Tone.Player, offset: number, rate: number, tPlay: number, wantDur: number) {
   const durBuf = voice.buffer?.duration ?? 0;
   const maxDur = rate > 0 ? Math.max(0, (durBuf - offset) / rate) : 0;
   const dur = Math.min(wantDur, Math.max(0, maxDur - 0.005));
-  if (dur <= 0) return false;
-  voice.start(tPlay, offset, dur); return true;
+  if (dur <= 0) return 0; // 0 = failed
+  voice.start(tPlay, offset, dur);
+  return dur; // >0 = success, actual dur
 }
 
-/* -------------------- streaming scheduler -------------------- */
-function stopStream() {
-  if (streamTimer != null) { window.clearInterval(streamTimer); streamTimer = null; }
-  streamIdx = 0; streamSeqMidi = [];
+function pianoStopStream() {
+  if (pianoTimer != null) { window.clearInterval(pianoTimer); pianoTimer = null; }
+  pianoIdx = 0; pianoSeqMidi = [];
 }
-function scheduleOne(i: number, tPlay: number, velDb: number) {
-  const a = pickNearestAnchor(streamSeqMidi[i]);
-  const semis = streamSeqMidi[i] - a.midi;
-  const rate = Math.pow(2, semis / 12);
-  const v = nextVoice(a);
-  v.playbackRate = rate; v.volume.value = velDb;
-  safeStartVoice(v, a.offsetSec, rate, tPlay, streamDurSec);
+
+function pianoScheduleOne(i: number, tPlay: number, velDb: number) {
+  const midi = pianoSeqMidi[i];
+
+  // try sample-based
+  let started = false;
+  try {
+    const a = pianoPickNearestAnchor(midi);
+    const semis = midi - a.midi;
+    const rate = Math.pow(2, semis / 12);
+    const v = pianoNextVoice(a);
+    v.playbackRate = rate; v.volume.value = velDb;
+    const dur = pianoSafeStartVoice(v, a.offsetSec, rate, tPlay, pianoDurSec);
+    started = dur > 0;
+  } catch (e) {
+    started = false;
+  }
+
+  // synth fallback if that step couldn't be started by the sample player
+  if (!started && pianoFallback) {
+    const freq = midiToFreq(midi);
+    const gain = clamp(Tone.dbToGain(velDb), 0.05, 1);
+    (pianoFallback as any).set({ volume: Tone.gainToDb(gain) });
+    pianoFallback.triggerAttackRelease(freq, pianoDurSec, tPlay, gain);
+  }
 }
-function startStream(seq: number[], startAt: number, stepSec: number, durSec: number, velDb: number) {
-  stopStream();
-  streamSeqMidi = seq; streamStartAt = startAt; streamStepSec = stepSec; streamDurSec = durSec;
 
-  const WINDOW = 2.0, TICK = 150; // seconds, ms
-  const prime = Math.min(8, seq.length);
-  for (let j = 0; j < prime; j++) scheduleOne(j, startAt + j * stepSec, velDb);
-  streamIdx = prime;
+function pianoStartStream(seq: number[], startAt: number, stepSec: number, durSec: number, velDb: number) {
+  pianoStopStream();
+  pianoSeqMidi = seq; pianoStartAt = startAt; pianoStepSec = stepSec; pianoDurSec = durSec;
 
-  streamTimer = window.setInterval(() => {
+  const WINDOW = 4.0, TICK = 100; // slightly bigger window, quicker tick
+  const prime = Math.min(12, seq.length);
+  for (let j = 0; j < prime; j++) pianoScheduleOne(j, startAt + j * stepSec, velDb);
+  pianoIdx = prime;
+
+  pianoTimer = window.setInterval(() => {
     const now = Tone.now(), horizon = now + WINDOW;
-    while (streamIdx < seq.length) {
-      const tPlay = startAt + streamIdx * stepSec;
+    while (pianoIdx < seq.length) {
+      const tPlay = startAt + pianoIdx * stepSec;
       if (tPlay > horizon) break;
-      scheduleOne(streamIdx, tPlay, velDb);
-      streamIdx++;
+      pianoScheduleOne(pianoIdx, tPlay, velDb);
+      pianoIdx++;
     }
-    if (streamIdx >= seq.length) stopStream();
+    if (pianoIdx >= seq.length) pianoStopStream();
   }, TICK);
 }
 
-/* -------------------- public API -------------------- */
+/* ---- public API (old mapping) ---- */
 export async function startPiano(opts: PianoOptions = {}) {
   if (!rawTimesSec.length) throw new Error("Call loadCsv() first.");
 
   const {
-    timeCompression = 1,
+    timeCompression = 2,
     smoothingWindow = 7,
     stepRateHz = 2,
     scaleMidiLow = 48,
@@ -221,9 +259,9 @@ export async function startPiano(opts: PianoOptions = {}) {
   // preprocess → normalized values
   const norm = normalizeCentered(movingAverage(rawVolts, smoothingWindow));
   const { values } = downsample(rawTimesSec, norm, stepRateHz);
-  if (values.length < 2) throw new Error("Not enough points after resampling.");
+  if (values.length < 2) throw new Error("[piano] Not enough points after resampling.");
 
-  // ✅ Correct mapping: value (-1..1) → index → C-major MIDI note
+  // value (-1..1) → index → C-major MIDI note
   const scale = buildScaleMidi(scaleMidiLow, scaleMidiHigh);
   const seqAll: number[] = new Array(values.length);
   for (let i = 0; i < values.length; i++) {
@@ -232,15 +270,220 @@ export async function startPiano(opts: PianoOptions = {}) {
   }
   const seq = maxNotes ? seqAll.slice(0, maxNotes) : seqAll;
 
-  const startAt = Tone.now() + 0.08;
+  const startAt = Tone.now() + 0.12;
   const stepSec = Math.max(0.25, 1 / stepRateHz / Math.max(1, timeCompression));
-  const durSec  = Math.max(0.25, noteLenSec / Math.max(1, timeCompression));
+  const durSec  = Math.max(0.28, noteLenSec / Math.max(1, timeCompression)); // slightly longer for clarity
   const velDb   = Tone.gainToDb(clamp(velocity, 0, 0.9));
 
-  startStream(seq, startAt, stepSec, durSec, velDb);
+  console.log("[piano] start", { count: seq.length, stepSec, durSec, velDb });
+  pianoStartStream(seq, startAt, stepSec, durSec, velDb);
 }
 
 export function stopPiano() {
-  stopStream();
-  try { anchors?.forEach((a) => a.players.forEach((p) => p.stop())); } catch {}
+  pianoStopStream();
+  try { pianoAnchors?.forEach((a) => a.players.forEach((p) => p.stop())); } catch {}
+}
+
+/* ===================================================================== */
+/* ===================== AMBIENT FM PAD (simple) ======================= */
+/* ===================================================================== */
+let fm: Tone.FMSynth | null = null;
+
+async function setupAmbientIfNeeded() {
+  if (fm) return;
+  fm = new Tone.FMSynth({
+    harmonicity: 2,
+    modulationIndex: 4,
+    envelope: { attack: 0.2, decay: 0.3, sustain: 0.6, release: 1.2 },
+    modulation: { type: "triangle" }
+  }).toDestination();
+}
+
+export async function startAmbient({
+  timeCompression = 3,
+  smoothingWindow = 7,
+  stepRateHz = 3,
+  velocity = 0.6,
+}: any = {}) {
+  if (!rawTimesSec.length) throw new Error("Call loadCsv() first.");
+  await Tone.start();
+  const ctx = Tone.getContext().rawContext; if (ctx.state !== "running") await ctx.resume();
+  await setupAmbientIfNeeded();
+
+  const norm = normalizeCentered(movingAverage(rawVolts, smoothingWindow));
+  const { values } = downsample(rawTimesSec, norm, stepRateHz);
+  if (!values.length) return;
+
+  const startAt = Tone.now() + 0.3;
+  const stepSec = (1 / stepRateHz) / Math.max(1, timeCompression);
+  for (let i = 0; i < values.length; i++) {
+    const base = mapLin(values[i], -1, 1, 220, 660);
+    const dur = clamp(0.4 / Math.max(1, timeCompression), 0.2, 1.2);
+    const t = startAt + i * stepSec;
+    fm!.triggerAttackRelease(base, dur, t, velocity);
+  }
+}
+
+/* ===================================================================== */
+/* ================= CHOIR (streamed chunks; unchanged) ================ */
+/* ===================================================================== */
+type ChoirVoice = {
+  player: Tone.Player;
+  gain: Tone.Gain;
+  busyUntil: number;
+};
+
+let choirVoices: ChoirVoice[] = [];
+let choirLoaded = false;
+let choirTimer: number | null = null;
+
+const CHOIR_FILE = "/sounds/choir.mp3";
+const CHOIR_POLY = 8;
+const CHOIR_OFFSET = 1.7;
+const CHUNK_DUR = 1.5;
+const HOP = 1.0;
+const SEMIS_GAIN = 120;
+const RATE_MIN = 0.9, RATE_MAX = 2.0;
+const MIN_NEG_SEMIS = -3;
+const BASE_SEMIS_BIAS = 2;
+const START_OFFSET = 0;
+
+let choirBus: Tone.Gain | null = null;
+let choirLimiter: Tone.Limiter | null = null;
+
+async function setupChoirIfNeeded() {
+  if (choirLoaded) return;
+
+  choirBus = new Tone.Gain(0.9);
+  choirLimiter = new Tone.Limiter(-2);
+  choirBus.chain(choirLimiter, Tone.Destination);
+
+  for (let i = 0; i < CHOIR_POLY; i++) {
+    const p = new Tone.Player(CHOIR_FILE);
+    p.autostart = false;
+    await p.load(CHOIR_FILE);
+    const g = new Tone.Gain(0).connect(choirBus);
+    p.connect(g);
+    choirVoices.push({ player: p, gain: g, busyUntil: 0 });
+  }
+  choirLoaded = true;
+  console.log(`[choir] Loaded ${choirVoices.length} voices`);
+}
+
+function getFreeVoice(t: number): ChoirVoice | null {
+  let best: ChoirVoice | null = null;
+  let bestTime = Infinity;
+  for (const v of choirVoices) {
+    if (v.busyUntil <= t) return v;
+    if (v.busyUntil < bestTime) { bestTime = v.busyUntil; best = v; }
+  }
+  return best;
+}
+
+export async function startChoir({
+  smoothingWindow = 5,
+  stepRateHz = 2,
+  timeCompression = 1,
+  maxNotes,
+}: any = {}) {
+  if (!rawTimesSec.length) throw new Error("Call loadCsv() first.");
+  await Tone.start();
+  const ctx = Tone.getContext().rawContext; if (ctx.state !== "running") await ctx.resume();
+  Tone.getContext().lookAhead = 0.07;
+
+  await setupChoirIfNeeded();
+  if (!choirVoices.length || !choirVoices[0].player.buffer) {
+    console.error("[choir] No buffers loaded; aborting.");
+    return;
+  }
+
+  const norm = normalizeCentered(movingAverage(rawVolts, smoothingWindow));
+  const ds = downsample(rawTimesSec, norm, stepRateHz);
+  let values = ds.values;
+  if (maxNotes) values = values.slice(0, maxNotes);
+  if (!values.length) return;
+
+  const stepSec = 1 / stepRateHz / Math.max(1, timeCompression);
+  const chunkDur = CHUNK_DUR / Math.max(1, timeCompression);
+  const hop = HOP / Math.max(1, timeCompression);
+  const chunkSize = Math.max(1, Math.round(chunkDur / stepSec));
+  const hopSize = Math.max(1, Math.round(hop / stepSec));
+
+  const chunks: number[] = [];
+  for (let i = 0; i < values.length; i += hopSize) {
+    const s = i;
+    const e = Math.min(values.length, i + chunkSize);
+    const part = values.slice(s, e);
+    if (!part.length) continue;
+    const avg = part.reduce((a, b) => a + b, 0) / part.length;
+    chunks.push(avg);
+  }
+  if (!chunks.length) {
+    console.warn("[choir] No chunks produced.");
+    return;
+  }
+
+  if (choirTimer != null) { window.clearInterval(choirTimer); choirTimer = null; }
+  const now = Tone.now();
+  for (const v of choirVoices) v.busyUntil = now;
+
+  const startTime = now + 0.6 + START_OFFSET;
+
+  let idx = 0;
+  const WINDOW = 1.8;
+  const TICK = 120;
+
+  choirTimer = window.setInterval(() => {
+    const now2 = Tone.now();
+    const horizon = now2 + WINDOW;
+
+    while (idx < chunks.length) {
+      const t = startTime + idx * hop;
+      if (t > horizon) break;
+
+      const avg = chunks[idx];
+      const semisRaw = clamp(avg * SEMIS_GAIN, -12, 12);
+      const semisSoft = Math.max(semisRaw, MIN_NEG_SEMIS);
+      const semis = semisSoft + BASE_SEMIS_BIAS;
+      const rate = clamp(Math.pow(2, semis / 12), RATE_MIN, RATE_MAX);
+
+      const voice = getFreeVoice(t);
+      if (!voice) break;
+
+      const bufDur = voice.player.buffer?.duration ?? 2;
+      const dur = clamp(Math.min(chunkDur, bufDur - CHOIR_OFFSET, 2.5), 0.12, 5);
+
+      voice.gain.gain.setValueAtTime(0, t);
+      voice.gain.gain.linearRampToValueAtTime(1, t + 0.06);
+      voice.gain.gain.setValueAtTime(1, t + Math.max(0.08, dur - 0.1));
+      voice.gain.gain.linearRampToValueAtTime(0, t + dur);
+
+      voice.player.playbackRate = rate;
+      voice.player.start(t, CHOIR_OFFSET, dur);
+      voice.busyUntil = t + dur + 0.01;
+
+      console.log(`[choir] chunk#${idx} @t=${t.toFixed(2)} dur=${dur.toFixed(2)} rate=${rate.toFixed(3)}`);
+      idx++;
+    }
+
+    if (idx >= chunks.length) {
+      if (choirTimer != null) { window.clearInterval(choirTimer); choirTimer = null; }
+      console.log("[choir] finished scheduling.");
+    }
+  }, TICK);
+}
+
+/* -------------------- Global Stop -------------------- */
+export function stopAll() {
+  // Piano
+  stopPiano();
+
+  // Ambient
+  try { fm?.dispose(); fm = null; } catch {}
+
+  // Choir
+  try {
+    if (choirTimer != null) { window.clearInterval(choirTimer); choirTimer = null; }
+    for (const v of choirVoices) { try { v.player.stop(); } catch {} v.gain.gain.setValueAtTime(0, Tone.now()); }
+  } catch {}
 }
