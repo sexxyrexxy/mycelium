@@ -24,7 +24,7 @@ function fallbackRequest(): SunoRequest {
     customMode: true,
     instrumental: true,
     model: "V3_5",
-    style: "Piano",
+    style: "Orchestra",
     title: "Mycelium Echoes",
     styleWeight: 1,
     weirdnessConstraint: 0.05,
@@ -91,13 +91,13 @@ export function mapSignalToSuno(analysis: SignalWindowsAnalysis | null): SunoReq
 
 //   const prompt = `2-minute instrumental Mushroom Status Report. No vocals or percussion. Tempo follows energy: low = 60 BPM, medium = 75 BPM, high = 95 BPM.
 // Begin medium-stable with 2 calm synth layers. Build to high-stable—3 bright evolving synths, faster tempo but minimal modulation (<65%). Shift to medium-spiking, same tempo with brief controlled glitch accents. Conclude in low-stable—1 soft layer, slow tempo, long reverb fade. Keep transitions seamless; flow must evolve naturally without sections or breaks. Sci-fi ambient tone, smooth and cohesive throughout.`
-const prompt = `2-minute instrumental Mushroom Status Report II. No vocals or percussion. Tempo follows energy: low = 60 BPM, medium = 75 BPM, high = 95 BPM. Start medium-stable, gentle ambient synths. Move through low-spiking valleys with slower tempo and darker tone, then lift into medium-fluctuating sections—2-layer textures, subtle modulation. Build toward a long high-stable rise near the end—3 bright synths, faster tempo, smooth evolving pads. Finish steady and glowing, fading softly. Keep flow continuous and organic, no sections or breaks. Sci-fi ambient mood, cohesive throughout.`
+const prompt = `2-minute orchestral instrumental Mushroom Status Report. No vocals or percussion. Tempo follows energy: low = 60 BPM, medium = 75 BPM, high = 95 BPM. Start medium-stable with soft strings and woodwinds. Gradually build to high-stable where trumpets enter—bright, strong, and clear to show peak energy. Shift into medium-spiking with controlled brass swells and brief woodwind flutters. Conclude low-stable with only strings and gentle horns fading slowly, no trumpet. Keep all transitions seamless; energy is expressed only by trumpet loudness and orchestral brightness. Maintain a smooth, cinematic sci-fi atmosphere—strict 2-minute continuous evolution, no breaks or sections.`
   console.log(prompt)
   return {
     customMode: true,
     instrumental: true,
-    model: "V3_5",
-    style: "Piano",
+    model: "V5",
+    style: "Synthwave cyberpunk",
     title: "Ghost Fungi Transmission",
     styleWeight: 1,
     weirdnessConstraint: 0.05,
