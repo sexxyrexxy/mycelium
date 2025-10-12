@@ -1,7 +1,7 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { drawVoronoiChart } from "@/components/portfolio/network/Network";
+import { drawVoronoiChart } from "@/components/portfolio/visualisation/Network";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { MushroomSprite } from "@/components/portfolio/PixelMushrooms";
 import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
@@ -180,6 +180,12 @@ export function Analysis() {
   const [legendOpen, setLegendOpen] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
+  const [workerLoading, setWorkerLoading] = useState(false);
+  const [workerError, setWorkerError] = useState<string | null>(null);
+
+  const combinedError = error || workerError;
+  const isLoading = loading || workerLoading;
+
   const chartConfig = {
     signal: {
       label: "Signal",
@@ -229,23 +235,42 @@ export function Analysis() {
       : loading && !standardChartData.length;
   const isEmpty =
     selectedRange === "rt"
-      ? !loading && !error && !baseData.length
-      : !loading && !error && !standardChartData.length;
+      ? !loading && !combinedError && !baseData.length
+      : !loading && !combinedError && !standardChartData.length;
+
   // --- Initialize Voronoi ---
   useEffect(() => {
-    if (!svgRef.current) return;
+    if (!svgRef.current || !mushId) return;
+
+    setWorkerLoading(true);
+    setWorkerError(null);
 
     const ProcessDataWorker = new Worker("/Workers/ProcessData.js");
     let cleanup: (() => void) | null = null;
 
-    fetch("/GhostFungi.csv")
-      .then(res => res.text())
-      .then(csvText => ProcessDataWorker.postMessage({ type: "csv", data: csvText }));
+    fetch(`/api/mushroom/${mushId}?range=1d`)
+      .then((res) => {
+        if (!res.ok)
+          throw new Error(`Unable to fetch mushroom signal data: API ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        const signals: Signal[] = json.signals;
+        ProcessDataWorker.postMessage({ type: "data", data: signals });
+      })
+      .catch((err) => {
+        console.error("Error fetching mushroom data:", err);
+        setWorkerError(err.message);
+        setWorkerLoading(false);
+      });
 
-    ProcessDataWorker.onmessage = event => {
-      const { mappedSpeeds: workerSpeeds, normalizedBaseline: workerBaseline, spikes: workerSpikes, error } = event.data;
+    ProcessDataWorker.onmessage = (event) => {
+      const { mappedSpeeds, normalizedBaseline, spikes, error } = event.data;
+
       if (error) {
-        console.error(error);
+        console.error("Worker error:", error);
+        setWorkerError("Failed to process mushroom signal data.");
+        setWorkerLoading(false);
         return;
       }
 
@@ -253,17 +278,20 @@ export function Analysis() {
         svgRef.current!,
         800,
         600,
-        workerSpeeds,
-        workerBaseline,
-        workerSpikes // <-- pass spikes to the chart
+        mappedSpeeds,
+        normalizedBaseline,
+        spikes,
+        false
       );
+
+      setWorkerLoading(false);
     };
 
     return () => {
-      ProcessDataWorker.terminate();
       if (cleanup) cleanup();
+      ProcessDataWorker.terminate();
     };
-  }, []);
+  }, [mushId]);
 
   return (
     <>
@@ -401,7 +429,19 @@ export function Analysis() {
 
         <div className="flex flex-col sm:flex-row gap-4">
           {/* Voronoi chart */}
-          <div className="flex-[3] rounded-2xl overflow-hidden shadow-md border border-gray-300/50 max-h-[600px]">
+          <div className="flex-[3] relative rounded-2xl overflow-hidden shadow-md border border-gray-300/50 max-h-[600px]">
+            {error && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-100 text-red-700 text-sm font-medium text-center px-4">
+                {error}
+              </div>
+            )}
+
+            {(loading || workerLoading) && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-50">
+                <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
+              </div>
+            )}
+
             <svg
               ref={svgRef}
               viewBox="0 0 800 600"

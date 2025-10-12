@@ -17,6 +17,8 @@ import {
   type SignalWindowsAnalysis,
 } from "@/lib/signalClassification";
 
+import MushroomLifeCycle from "@/components/portfolio/MushroomLifeCycle";
+
 const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "rt",
   "4h",
@@ -306,6 +308,10 @@ useEffect(() => {
               Listening for the next movement…
             </p>
           )}
+          {/* Mushroom Phase*/}
+          <div className="">
+            <MushroomLifeCycle />
+          </div>
         </aside>
       </div>
 
