@@ -8,7 +8,12 @@ import {
   type TimelineRange,
   type SignalDatum,
 } from "@/hooks/useMushroomSignals";
-import { classifySignalWindows, type SignalWindowsAnalysis } from "@/lib/signalClassification";
+import {
+  classifySignalWindows,
+  type SignalWindowsAnalysis,
+} from "@/lib/signalClassification";
+
+type SonifyModule = typeof import("./sonification/sonify");
 
 type Props = {
   mushId?: string | null;
@@ -17,6 +22,7 @@ type Props = {
 
 type SunoTrack = {
   id: string;
+  model?: string;
   audioUrl?: string;
   streamAudioUrl?: string;
   title?: string;
@@ -26,8 +32,68 @@ type SunoTrack = {
 
 type SunoStatusResponse = {
   status: string;
-  response?: { sunoData?: SunoTrack[] };
+  response?: {
+    sunoData?: SunoTrack[];
+    data?: unknown;
+    [key: string]: unknown;
+  };
+  data?: unknown;
+  sunoData?: SunoTrack[];
+  error?: string;
 };
+
+function normalizeTrack(raw: any): SunoTrack | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const idCandidate =
+    raw.id ??
+    raw.audioId ??
+    raw.audio_id ??
+    raw.songId ??
+    raw.trackId ??
+    raw.clipId ??
+    raw.parentId;
+  if (!idCandidate) return null;
+
+  const modelCandidate =
+    raw.model ??
+    raw.modelName ??
+    raw.engine ??
+    raw.version ??
+    raw.metadata?.model ??
+    raw.request?.model;
+
+  const audioUrlCandidate =
+    raw.audioUrl ??
+    raw.audio_url ??
+    raw.mp3Url ??
+    raw.fullAudioUrl ??
+    raw.url ??
+    raw.full_audio_url ??
+    raw.mediaUrl;
+
+  const streamUrlCandidate =
+    raw.streamAudioUrl ??
+    raw.stream_url ??
+    raw.streamUrl ??
+    raw.audioStreamUrl ??
+    raw.live_url;
+
+  return {
+    id: String(idCandidate),
+    model: modelCandidate ? String(modelCandidate) : undefined,
+    audioUrl: audioUrlCandidate ? String(audioUrlCandidate) : undefined,
+    streamAudioUrl: streamUrlCandidate ? String(streamUrlCandidate) : undefined,
+    title: raw.title ?? raw.name ?? undefined,
+    tags: raw.tags ?? undefined,
+    duration:
+      typeof raw.duration === "number"
+        ? raw.duration
+        : typeof raw.length === "number"
+          ? raw.length
+          : undefined,
+  };
+}
 
 const RANGE_LABELS: Record<TimelineRange, string> = {
   rt: "Real Time",
@@ -41,18 +107,17 @@ const RANGE_LABELS: Record<TimelineRange, string> = {
 
 const DEFAULT_RANGE: TimelineRange = "1d";
 
-function toSamples(data: SignalDatum[]): { samples: { signal: number; timestampMs: number }[] } {
-  if (!data.length) {
-    return { samples: [] };
-  }
-  const samples = data.map((datum) => ({
-    signal: datum.signal,
-    timestampMs: datum.ms,
-  }));
-  return { samples };
+function toSamples(data: SignalDatum[]) {
+  if (!data.length) return { samples: [] };
+  return {
+    samples: data.map((d) => ({ signal: d.signal, timestampMs: d.ms })),
+  };
 }
 
-function describeAnalysis(analysis: SignalWindowsAnalysis | null, range: TimelineRange) {
+function describeAnalysis(
+  analysis: SignalWindowsAnalysis | null,
+  range: TimelineRange,
+) {
   if (!analysis) return null;
   const startMs = analysis.windows[0]?.startMs ?? 0;
   const endMs = analysis.windows.at(-1)?.endMs ?? startMs;
@@ -72,7 +137,9 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [fullUrl, setFullUrl] = useState<string | null>(null);
-  const taskIdRef = useRef<string | null>(null);
+
+  const lastAudioIdRef = useRef<string | null>(null);
+  const lastModelRef = useRef<string | null>(null);
 
   const {
     rangeData,
@@ -85,34 +152,146 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
 
   useEffect(() => {
     if (!mushId) return;
-    if (selectedRange !== range) {
-      setSelectedRange(range);
-    }
+    if (selectedRange !== range) setSelectedRange(range);
   }, [mushId, range, selectedRange, setSelectedRange]);
 
   const analysisSource = useMemo<SignalDatum[]>(
     () => (rangeData.length ? rangeData : viewData),
-    [rangeData, viewData]
+    [rangeData, viewData],
   );
-
   const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
 
   const analysis: SignalWindowsAnalysis | null = useMemo(() => {
     if (!samples.length) return null;
-    return classifySignalWindows(samples);
+
+    const firstMs = samples[0].timestampMs!;
+    const lastMs = samples[samples.length - 1].timestampMs!;
+    const totalMs = Math.max(lastMs - firstMs, 10_000); // ~10s guard
+
+    const DESIRED = 12;
+    const desiredWindows = Math.min(16, Math.max(8, DESIRED));
+    const windowMs = Math.max(Math.floor(totalMs / desiredWindows), 5_000); // ~5s
+    const hopMs = windowMs;
+    const minimumSamplesPerWindow = 1;
+
+    return classifySignalWindows(
+      samples.map((s) => ({
+        signal: s.signal,
+        timestampMs: s.timestampMs,
+      })),
+      { windowMs, hopMs, desiredWindows, minimumSamplesPerWindow },
+    );
   }, [samples]);
 
   const analysisSummary = useMemo(
     () => describeAnalysis(analysis, range),
-    [analysis, range]
+    [analysis, range],
   );
 
-  const displayRange = analysisSummary?.rangeLabel ?? RANGE_LABELS[range] ?? RANGE_LABELS[DEFAULT_RANGE];
+  const displayRange =
+    analysisSummary?.rangeLabel ?? RANGE_LABELS[range] ?? RANGE_LABELS[DEFAULT_RANGE];
+
+  const pickTrack = (resp: SunoStatusResponse): SunoTrack | undefined => {
+    const candidates: any[] = [];
+    const push = (value: any) => {
+      if (!value) return;
+      if (Array.isArray(value)) {
+        value.forEach(push);
+      } else {
+        candidates.push(value);
+      }
+    };
+
+    push(resp?.response?.sunoData);
+    push(resp?.response?.data);
+    push(resp?.response);
+    push(resp?.data);
+    push((resp as any)?.sunoData);
+
+    const normalized = candidates
+      .map(normalizeTrack)
+      .filter((track): track is SunoTrack => !!track)
+      .sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0));
+
+    return normalized[0];
+  };
+
+  const pollStatus = useCallback(
+    async (taskId: string) => {
+      for (;;) {
+        const res = await fetch(
+          `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
+          { cache: "no-store" },
+        );
+        const json: SunoStatusResponse = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+
+        const picked = pickTrack(json);
+        if (picked) {
+          if (picked.id) lastAudioIdRef.current = picked.id;
+          if (picked.model) lastModelRef.current = picked.model;
+
+          if (picked.streamAudioUrl) {
+            setStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
+          }
+          if (picked.audioUrl) {
+            setFullUrl((prev) => prev ?? picked.audioUrl ?? null);
+          }
+        }
+
+        setStatus(json.status ?? "unknown");
+        if (json.status === "SUCCESS" || json.status === "FAIL") {
+          if (
+            json.status === "SUCCESS" &&
+            (!lastAudioIdRef.current || !lastModelRef.current)
+          ) {
+            try {
+              const resolveRes = await fetch(
+                `/api/suno/resolve-audio?taskId=${encodeURIComponent(taskId)}`,
+                { cache: "no-store" },
+              );
+              if (resolveRes.ok) {
+                const resolved = await resolveRes.json();
+                if (resolved?.id) lastAudioIdRef.current = resolved.id;
+                if (resolved?.model) lastModelRef.current = resolved.model;
+                if (resolved?.streamAudioUrl) {
+                  setStreamUrl((prev) => prev ?? resolved.streamAudioUrl ?? null);
+                }
+                if (resolved?.audioUrl) {
+                  setFullUrl((prev) => prev ?? resolved.audioUrl ?? null);
+                }
+              } else if (process.env.NODE_ENV !== "production") {
+                const errJson = await resolveRes.json().catch(() => null);
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "[Suno] resolve-audio fallback failed",
+                  resolveRes.status,
+                  errJson,
+                );
+              }
+            } catch (resolveErr) {
+              if (process.env.NODE_ENV !== "production") {
+                // eslint-disable-next-line no-console
+                console.warn("[Suno] resolve-audio error", resolveErr);
+              }
+            }
+          }
+          return json;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    },
+    [],
+  );
 
   const onHear = useCallback(async () => {
     if (busy) return;
+
     if (!analysis || !analysis.windows.length) {
-      setError("Signal windows are still loading. Try again shortly.");
+      setError(
+        "Signal windows are still loading (or range too short). Try a larger range.",
+      );
       setStatus("error");
       return;
     }
@@ -122,70 +301,98 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
     setStatus("preparing");
     setStreamUrl(null);
     setFullUrl(null);
-    taskIdRef.current = null;
+    lastAudioIdRef.current = null;
+    lastModelRef.current = null;
 
     try {
-      const mod = await import("@/components/portfolio/sonification/sonify");
-      if (typeof mod.mapSignalToSuno !== "function") {
-        console.error("sonify exports:", Object.keys(mod));
-        throw new Error("mapSignalToSuno is not exported from sonify.ts");
+      const mod: SonifyModule = await import(
+        "@/components/portfolio/sonification/sonify"
+      );
+
+      if (!mod.initialPromptFromAnalysis && !mod.mapSignalToSuno) {
+        throw new Error("sonify.ts is missing prompt builders");
       }
-      const body = mod.mapSignalToSuno(analysis);
+
+      const baseBody = mod.initialPromptFromAnalysis
+        ? mod.initialPromptFromAnalysis(analysis)
+        : mod.mapSignalToSuno(analysis);
+
+      if (baseBody?.model) {
+        lastModelRef.current = baseBody.model;
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.group("[Suno] Base prompt");
+        console.log(baseBody);
+        console.groupEnd();
+      }
 
       const genRes = await fetch("/api/suno/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify(baseBody),
       });
       const genJson = await genRes.json();
       if (!genRes.ok || !genJson?.taskId) {
         throw new Error(genJson?.error ?? "Failed to start Suno generation");
       }
-      taskIdRef.current = genJson.taskId;
+
       setStatus("queued");
+      await pollStatus(genJson.taskId);
 
-      let keepPolling = true;
-      while (keepPolling) {
-        const tid = taskIdRef.current!;
-        const res = await fetch(`/api/suno/status?taskId=${encodeURIComponent(tid)}`, {
-          cache: "no-store",
-        });
-        const data: SunoStatusResponse = await res.json();
-
-        if (!res.ok) {
-          throw new Error((data as any)?.error ?? "Status request failed");
-        }
-
-        setStatus(data.status ?? "unknown");
-
-        const track = data?.response?.sunoData?.[0];
-        if (track?.streamAudioUrl) {
-          setStreamUrl((prev) => prev ?? track.streamAudioUrl ?? null);
-        }
-        if (track?.audioUrl) {
-          setFullUrl((prev) => prev ?? track.audioUrl ?? null);
-        }
-
-        if (data.status === "SUCCESS" || data.status === "FAIL") {
-          keepPolling = false;
-        } else {
-          // eslint-disable-next-line no-await-in-loop
-          await new Promise((r) => setTimeout(r, 5000));
-        }
+      const baseAudioId = lastAudioIdRef.current;
+      const baseModel = lastModelRef.current;
+      if (!baseAudioId || !baseModel) {
+        throw new Error(
+          "Missing audioId/model from base generation; cannot extend.",
+        );
       }
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+
+      const segments = mod
+        .makeExtendPlanFromAnalysis(analysis)
+        .filter((seg) => seg.startSec > 0);
+
+      for (let i = 0; i < segments.length; i += 1) {
+        const seg = segments[i];
+        setStatus(`extend ${i + 1}/${segments.length} @${seg.startSec}s`);
+
+        if (process.env.NODE_ENV !== "production") {
+          console.group(
+            `[Suno Extend] segment ${i + 1}/${segments.length}`,
+          );
+          console.log(seg);
+          console.groupEnd();
+        }
+
+        const extRes = await fetch("/api/suno/extend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            audioId: lastAudioIdRef.current,
+            model: lastModelRef.current,
+            continueAt: seg.startSec,
+            prompt: seg.prompt,
+            style: seg.style,
+            title: seg.title,
+          }),
+        });
+        const extJson = await extRes.json();
+        if (!extRes.ok || !extJson?.taskId) {
+          throw new Error(extJson?.error ?? "Failed to start extension");
+        }
+
+        await pollStatus(extJson.taskId);
+      }
+
+      setStatus("SUCCESS");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
       setStatus("error");
     } finally {
       setBusy(false);
     }
-  }, [analysis, busy]);
-
-  useEffect(() => {
-    return () => {
-      taskIdRef.current = null;
-    };
-  }, []);
+  }, [analysis, busy, pollStatus]);
 
   const signalLoadingState = signalsLoading && !analysis;
   const disableButton = busy || !mushId || signalLoadingState || !analysis;
@@ -197,11 +404,15 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Generates music from your mushroom’s electrical signals via Suno. Source:{" "}
+          Generates music from the mushroom signal data via Suno. Source:{" "}
           <span className="text-xs font-medium">
-            BigQuery · {displayRange}
-            {analysisSummary?.windowCount != null ? ` · ${analysisSummary.windowCount} windows` : ""}
-            {analysisSummary?.totalSamples != null ? ` · ${analysisSummary.totalSamples} samples` : ""}
+            BigQuery • {displayRange}
+            {analysisSummary?.windowCount != null
+              ? ` • ${analysisSummary.windowCount} windows`
+              : ""}
+            {analysisSummary?.totalSamples != null
+              ? ` • ${analysisSummary.totalSamples} samples`
+              : ""}
           </span>
         </p>
 
@@ -216,11 +427,11 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
           disabled={disableButton}
           className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          {busy ? "Working…" : mushId ? "Hear your Mushroom" : "Select a mushroom"}
+          {busy ? "Working..." : mushId ? "Hear your Mushroom" : "Select a mushroom"}
         </button>
 
         <div className="text-sm">
-          <div>Status: {signalLoadingState ? "loading signals…" : status}</div>
+          <div>Status: {signalLoadingState ? "loading signals..." : status}</div>
           {error && <div className="text-rose-600">Error: {error}</div>}
         </div>
 
