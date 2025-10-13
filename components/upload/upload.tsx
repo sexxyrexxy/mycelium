@@ -1,33 +1,3 @@
-// "use client";
-// import { useState } from "react";
-
-// export const UploadPage = () => {
-//   const [busy, setBusy] = useState(false);
-
-//   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-//     e.preventDefault();
-//     const file = (e.currentTarget.elements.namedItem("file") as HTMLInputElement).files?.[0];
-//     if (!file) return alert("Pick a CSV");
-//     const fd = new FormData();
-//     fd.append("file", file);
-
-//     setBusy(true);
-//     const res = await fetch("/api/upload", { method: "POST", body: fd });
-//     const json = await res.json();
-//     setBusy(false);
-//     alert(JSON.stringify(json));
-//   };
-
-//   return (
-//     <form onSubmit={onSubmit} className="p-6 space-y-3">
-//       <input name="file" type="file" accept=".csv,text/csv" />
-//       <button disabled={busy} className="px-3 py-1 bg-blue-600 text-white rounded">
-//         {busy ? "Uploading…" : "Upload"}
-//       </button>
-//     </form>
-//   );
-// }
-
 "use client";
 import { useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -41,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch"; // <-- toggle
 
 type UploadPageProps = {
   onClose?: () => void;
@@ -56,6 +27,7 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState("");
+  const [realtime, setRealtime] = useState<boolean>(false); // <-- default ON
 
   const handleButtonClick = () => {
     fileInputRef.current?.click();
@@ -88,14 +60,16 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
     fd.append("kind", kind);
     fd.append("userId", "demo-user-123");
 
+    const endpoint = realtime ? "/api/realtime_upload" : "/api/mushrooms";
+
     setBusy(true);
-    setStatus(`Uploading ${file.name}…`);
+    setStatus(`Uploading ${file.name}… (${realtime ? "realtime" : "batch"})`);
     setError(null);
     try {
-      const res = await fetch("/api/mushrooms", { method: "POST", body: fd });
+      const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Upload failed");
-      setStatus(`Uploaded ${file.name}`);
+      setStatus(`Uploaded ${file.name}${realtime ? " (realtime started)" : ""}`);
       onUploaded?.(json);
       setTimeout(() => {
         onClose?.();
@@ -116,6 +90,29 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
+
+      {/* Mode toggle */}
+      <div className="flex items-center justify-between rounded-2xl border bg-muted/30 p-4">
+        <div className="space-y-1 text-sm">
+          <div className="font-medium">Upload in real time</div>
+          <div className="text-muted-foreground">
+            {realtime
+              ? "Streams 1 row/sec and publishes to Pub/Sub for live charts."
+              : "Uploads using the standard batch API."}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className={`text-xs px-2 py-1 rounded ${
+              realtime ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"
+            }`}
+          >
+            {realtime ? "/api/realtime_upload" : "/api/mushrooms"}
+          </span>
+          <Switch checked={realtime} onCheckedChange={setRealtime} disabled={busy} />
+        </div>
+      </div>
+
       <div className="space-y-4 rounded-2xl border border-dashed border-muted-foreground/50 bg-muted/30 p-5 text-sm text-muted-foreground">
         <div className="flex flex-col gap-3">
           <div className="grid gap-2">
@@ -161,13 +158,15 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
                 <SelectItem value="Shiitake">Shiitake</SelectItem>
                 <SelectItem value="Enokitake">Enokitake</SelectItem>
                 <SelectItem value="King Oyster">King Oyster</SelectItem>
+                <SelectItem value="Ghost Fungi">Ghost Fungi</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
         <div className="rounded-xl bg-white/80 px-4 py-3 text-xs text-muted-foreground shadow-inner">
-          Attach the CSV exported from your sensor rig. We map timestamps to `Timestamp` and millivolts to `Signal_mV` before pushing to BigQuery.
+          Attach the CSV exported from your sensor rig. We map timestamps to <code>Timestamp</code> and millivolts to{" "}
+          <code>Signal_mV</code> before pushing to BigQuery.
         </div>
 
         <Button
