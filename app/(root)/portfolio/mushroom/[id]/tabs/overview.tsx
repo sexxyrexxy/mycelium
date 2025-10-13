@@ -50,15 +50,27 @@ export default function Overview() {
     };
   }, [id]);
 
-
   // --- Small internal component for the 5-segment level bar ---
-  function SegBar({ level, filledClass, label }: { level: number; filledClass: string; label: string }) {
+  function SegBar({
+    level,
+    filledClass,
+    label,
+  }: {
+    level: number;
+    filledClass: string;
+    label: string;
+  }) {
     return (
-      <div aria-label={`${label} level ${level} out of 5`} className="flex gap-1 mt-2">
+      <div
+        aria-label={`${label} level ${level} out of 5`}
+        className="flex gap-1 mt-2"
+      >
         {Array.from({ length: 5 }).map((_, i) => (
           <span
             key={i}
-            className={`h-2 w-8 rounded ${i < level ? filledClass : "bg-gray-200"}`}
+            className={`h-2 w-8 rounded ${
+              i < level ? filledClass : "bg-gray-200"
+            }`}
           />
         ))}
       </div>
@@ -68,14 +80,15 @@ export default function Overview() {
   // --- Helper for status chip styling by level ---
   function levelChip(level: number) {
     if (level >= 4) return { text: "High", cls: "bg-green-100 text-green-700" };
-    if (level === 3) return { text: "Medium", cls: "bg-amber-100 text-amber-700" };
+    if (level === 3)
+      return { text: "Medium", cls: "bg-amber-100 text-amber-700" };
     return { text: "Low", cls: "bg-gray-100 text-gray-700" };
   }
 
   // Hardcoded demo levels
   const nutrientLevel = 4; // High
   const humidityLevel = 3; // Medium
-  const lightLevel = 2;    // Low
+  const lightLevel = 2; // Low
 
   const nutrientChip = levelChip(nutrientLevel);
   const humidityChip = levelChip(humidityLevel);
@@ -107,7 +120,7 @@ export default function Overview() {
           {/* NEW: Care panel directly below the chart */}
           <Card className="mt-4">
             <CardHeader>
-              <CardTitle>Your Mushroom's Needs</CardTitle>
+              <CardTitle>Your Mushrooms Needs</CardTitle>
             </CardHeader>
             <CardContent className="space-y-5">
               {/* Nutrients */}
@@ -116,13 +129,20 @@ export default function Overview() {
                   <span className="font-medium flex items-center gap-2">
                     🍄 Nutrients
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${nutrientChip.cls}`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${nutrientChip.cls}`}
+                  >
                     {nutrientChip.text} • {nutrientLevel}/5
                   </span>
                 </div>
-                <SegBar level={nutrientLevel} filledClass="bg-emerald-500" label="Nutrients" />
+                <SegBar
+                  level={nutrientLevel}
+                  filledClass="bg-emerald-500"
+                  label="Nutrients"
+                />
                 <p className="text-xs text-gray-600 mt-2">
-                  Tip: Mix in fresh substrate or supplement with spent coffee grounds or bran for a gentle boost.
+                  Tip: Mix in fresh substrate or supplement with spent coffee
+                  grounds or bran for a gentle boost.
                 </p>
               </div>
 
@@ -132,13 +152,20 @@ export default function Overview() {
                   <span className="font-medium flex items-center gap-2">
                     💧 Humidity
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${humidityChip.cls}`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${humidityChip.cls}`}
+                  >
                     {humidityChip.text} • {humidityLevel}/5
                   </span>
                 </div>
-                <SegBar level={humidityLevel} filledClass="bg-sky-500" label="Humidity" />
+                <SegBar
+                  level={humidityLevel}
+                  filledClass="bg-sky-500"
+                  label="Humidity"
+                />
                 <p className="text-xs text-gray-600 mt-2">
-                  Tip: Aim for 85–92% RH. Lightly mist walls (not caps) and keep airflow gentle.
+                  Tip: Aim for 85–92% RH. Lightly mist walls (not caps) and keep
+                  airflow gentle.
                 </p>
               </div>
 
@@ -148,13 +175,20 @@ export default function Overview() {
                   <span className="font-medium flex items-center gap-2">
                     ☀️ Light
                   </span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${lightChip.cls}`}>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full ${lightChip.cls}`}
+                  >
                     {lightChip.text} • {lightLevel}/5
                   </span>
                 </div>
-                <SegBar level={lightLevel} filledClass="bg-amber-400" label="Light" />
+                <SegBar
+                  level={lightLevel}
+                  filledClass="bg-amber-400"
+                  label="Light"
+                />
                 <p className="text-xs text-gray-600 mt-2">
-                  Tip: Bright, indirect light is perfect. Think “north-facing window” or diffused LED.
+                  Tip: Bright, indirect light is perfect. Think “north-facing
+                  window” or diffused LED.
                 </p>
               </div>
 
@@ -184,19 +218,26 @@ export default function Overview() {
                   <p className="mt-1 text-2xl font-semibold text-emerald-700">
                     {avgMv != null ? `${avgMv.toFixed(1)} mV` : "—"}
                   </p>
-                  <p className="text-xs text-muted-foreground">Baseline energy across current samples.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Baseline energy across current samples.
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
                     Mood
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-emerald-700">Steady + balanced</p>
-                  <p className="text-xs text-muted-foreground">Signals hovering around a comfortable band.</p>
+                  <p className="mt-1 text-lg font-semibold text-emerald-700">
+                    Steady + balanced
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Signals hovering around a comfortable band.
+                  </p>
                 </div>
               </div>
               <div className="rounded-xl bg-white/80 px-4 py-3 text-sm leading-relaxed text-muted-foreground shadow-inner">
-                When the average drifts upward, expect fresh growth or response to touch. A drop hints at rest—check
-                humidity or light if it lingers.
+                When the average drifts upward, expect fresh growth or response
+                to touch. A drop hints at rest—check humidity or light if it
+                lingers.
               </div>
             </CardContent>
           </Card>
@@ -208,19 +249,32 @@ export default function Overview() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Status</p>
-                  <p className="mt-1 text-lg font-semibold text-sky-700">High Activity 🌟</p>
-                  <p className="text-xs text-muted-foreground">Frequent bursts across the latest window.</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                    Status
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-sky-700">
+                    High Activity 🌟
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Frequent bursts across the latest window.
+                  </p>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">Momentum</p>
-                  <p className="mt-1 text-lg font-semibold text-sky-700">+18%</p>
-                  <p className="text-xs text-muted-foreground">Climbing faster than the previous slice.</p>
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                    Momentum
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-sky-700">
+                    +18%
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Climbing faster than the previous slice.
+                  </p>
                 </div>
               </div>
               <div className="rounded-xl bg-white/80 px-4 py-3 text-sm leading-relaxed text-muted-foreground shadow-inner">
-                If the next range stays bright, the mycelium is capitalising on fresh moisture or airflow. A fading
-                momentum line suggests it is cooling off—perfect time for a light mist.
+                If the next range stays bright, the mycelium is capitalising on
+                fresh moisture or airflow. A fading momentum line suggests it is
+                cooling off—perfect time for a light mist.
               </div>
             </CardContent>
           </Card>

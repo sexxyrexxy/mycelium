@@ -129,12 +129,12 @@ const MushroomCaveVisualization: React.FC = () => {
   const currentDesc = getDescriptionForColor(rgbStringToHex(glowColor));
 
   return (
-    <div className="flex flex-col justify-center items-center min-h-[500px] bg-white px-4 md:px-0">
-      <h1 className="mb-1 text-2xl font-bold">Pulse Cavern</h1>
-      <h5 className="mb-2 text-gray-700 italic">
+    <div className="flex flex-col items-center justify-center bg-white px-4 py-10 sm:px-6">
+      <h1 className="mb-1 text-center text-2xl font-bold md:text-3xl">Pulse Cavern</h1>
+      <h5 className="mb-2 text-center text-gray-700 italic">
         Bioluminescent mapping of electrical signal intensity
       </h5>
-      <p className="mb-6 text-gray-700 text-center max-w-[700px]">
+      <p className="mb-6 max-w-3xl text-center text-gray-700">
         This visualization transforms raw electrical signals from mushrooms into a glowing subterranean landscape.
         Bioluminescent fungi pulse gently with rhythmic activity, while occasional spikes shimmer across the cavern — highlighting moments
         of intensity, reaction, or change.
@@ -147,22 +147,21 @@ const MushroomCaveVisualization: React.FC = () => {
       )}
 
       {/* SVG container with relative positioning for overlays */}
-      <div
-        className="relative rounded-2xl overflow-hidden shadow-md border border-gray-300/50"
-        style={{ width: 800, height: 600, backgroundColor: "#0b0b0b" }}
-      >
-        {(loading) && (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-50">
-            <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
-          </div>
-        )}
+      <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-gray-300/50 bg-[#0b0b0b] shadow-md">
+        <div className="relative aspect-[4/3] w-full">
+          {loading && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/50">
+              <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-500 border-dashed" />
+            </div>
+          )}
 
-        <svg
-          ref={svgRef}
-          viewBox="0 0 800 600"
-          preserveAspectRatio="xMidYMid meet"
-          className="w-full h-full block"
-        />
+          <svg
+            ref={svgRef}
+            viewBox="0 0 800 600"
+            preserveAspectRatio="xMidYMid meet"
+            className="absolute inset-0 h-full w-full"
+          />
+        </div>
       </div>
 
       <div className="mt-6 w-full max-w-[800px] grid grid-cols-1 md:grid-cols-2 gap-4">
