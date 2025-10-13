@@ -3,11 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  useMushroomSignals,
-  type TimelineRange,
-  type SignalDatum,
-} from "@/hooks/useMushroomSignals";
+import Papa from "papaparse";
 import {
   classifySignalWindows,
   type SignalWindowsAnalysis,
@@ -17,7 +13,7 @@ type SonifyModule = typeof import("./sonification/sonify");
 
 type Props = {
   mushId?: string | null;
-  range?: TimelineRange;
+  csvUrl?: string;
 };
 
 type SunoTrack = {
@@ -42,70 +38,98 @@ type SunoStatusResponse = {
   error?: string;
 };
 
-function normalizeTrack(raw: any): SunoTrack | null {
-  if (!raw || typeof raw !== "object") return null;
+type SignalDatum = {
+  index: number;
+  ms: number;
+  signal: number;
+};
 
-  const idCandidate =
-    raw.id ??
-    raw.audioId ??
-    raw.audio_id ??
-    raw.songId ??
-    raw.trackId ??
-    raw.clipId ??
-    raw.parentId;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object";
+}
+
+function pickString(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return undefined;
+}
+
+function normalizeTrack(raw: unknown): SunoTrack | null {
+  if (!isRecord(raw)) return null;
+
+  const idCandidate = pickString(
+    raw,
+    "id",
+    "audioId",
+    "audio_id",
+    "songId",
+    "trackId",
+    "clipId",
+    "parentId",
+  );
   if (!idCandidate) return null;
 
   const modelCandidate =
-    raw.model ??
-    raw.modelName ??
-    raw.engine ??
-    raw.version ??
-    raw.metadata?.model ??
-    raw.request?.model;
+    pickString(raw, "model", "modelName", "engine", "version") ??
+    (isRecord(raw.metadata) ? pickString(raw.metadata, "model") : undefined) ??
+    (isRecord(raw.request) ? pickString(raw.request, "model") : undefined);
 
-  const audioUrlCandidate =
-    raw.audioUrl ??
-    raw.audio_url ??
-    raw.mp3Url ??
-    raw.fullAudioUrl ??
-    raw.url ??
-    raw.full_audio_url ??
-    raw.mediaUrl;
+  const audioUrlCandidate = pickString(
+    raw,
+    "audioUrl",
+    "audio_url",
+    "mp3Url",
+    "fullAudioUrl",
+    "url",
+    "full_audio_url",
+    "mediaUrl",
+  );
 
-  const streamUrlCandidate =
-    raw.streamAudioUrl ??
-    raw.stream_url ??
-    raw.streamUrl ??
-    raw.audioStreamUrl ??
-    raw.live_url;
+  const streamUrlCandidate = pickString(
+    raw,
+    "streamAudioUrl",
+    "stream_url",
+    "streamUrl",
+    "audioStreamUrl",
+    "live_url",
+  );
+
+  const title =
+    pickString(raw, "title", "name") ??
+    (typeof raw.title === "string" ? raw.title : undefined);
+  const tags =
+    typeof raw.tags === "string" || Array.isArray(raw.tags)
+      ? (raw.tags as string | string[])
+      : undefined;
+
+  let duration: number | undefined;
+  if (typeof raw.duration === "number" && Number.isFinite(raw.duration)) {
+    duration = raw.duration;
+  } else if (typeof raw.length === "number" && Number.isFinite(raw.length)) {
+    duration = raw.length;
+  }
 
   return {
     id: String(idCandidate),
     model: modelCandidate ? String(modelCandidate) : undefined,
     audioUrl: audioUrlCandidate ? String(audioUrlCandidate) : undefined,
     streamAudioUrl: streamUrlCandidate ? String(streamUrlCandidate) : undefined,
-    title: raw.title ?? raw.name ?? undefined,
-    tags: raw.tags ?? undefined,
-    duration:
-      typeof raw.duration === "number"
-        ? raw.duration
-        : typeof raw.length === "number"
-          ? raw.length
-          : undefined,
+    title,
+    tags: typeof tags === "string" ? tags : Array.isArray(tags) ? tags.join(", ") : undefined,
+    duration,
   };
 }
 
-const RANGE_LABELS: Record<TimelineRange, string> = {
-  rt: "Real Time",
-  "4h": "Last 4 Hours",
-  "12h": "Last 12 Hours",
-  "1d": "Last Day",
-  "3d": "Last 3 Days",
-  "1w": "Last Week",
-  all: "All Time",
-};
-
-const DEFAULT_RANGE: TimelineRange = "1d";
+const SYNTH_TARGET_DURATION_SEC = 120;
+const DEFAULT_CSV_URL = "/GhostFungi.csv";
 
 function toSamples(data: SignalDatum[]) {
   if (!data.length) return { samples: [] };
@@ -116,7 +140,6 @@ function toSamples(data: SignalDatum[]) {
 
 function describeAnalysis(
   analysis: SignalWindowsAnalysis | null,
-  range: TimelineRange,
 ) {
   if (!analysis) return null;
   const startMs = analysis.windows[0]?.startMs ?? 0;
@@ -124,41 +147,104 @@ function describeAnalysis(
   const durationMs = Math.max(endMs - startMs, 0);
   const hours = durationMs ? durationMs / (1000 * 60 * 60) : null;
   return {
-    rangeLabel: RANGE_LABELS[range] ?? range.toUpperCase(),
+    rangeLabel: "CSV Source",
     totalSamples: analysis.globalStats.count,
     windowCount: analysis.windows.length,
     hours,
   };
 }
 
-export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
+export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [fullUrl, setFullUrl] = useState<string | null>(null);
 
+  const [synthBusy, setSynthBusy] = useState(false);
+  const [synthStatus, setSynthStatus] = useState<string>("idle");
+  const [synthError, setSynthError] = useState<string | null>(null);
+  const [synthStreamUrl, setSynthStreamUrl] = useState<string | null>(null);
+  const [synthFullUrl, setSynthFullUrl] = useState<string | null>(null);
+  const [rawSynthFile, setRawSynthFile] = useState<File | null>(null);
+  const [rawSynthUrl, setRawSynthUrl] = useState<string | null>(null);
+  const [synthUploadBusy, setSynthUploadBusy] = useState(false);
+  const [csvSamples, setCsvSamples] = useState<SignalDatum[]>([]);
+  const [csvLoading, setCsvLoading] = useState(true);
+  const [csvError, setCsvError] = useState<string | null>(null);
+
   const lastAudioIdRef = useRef<string | null>(null);
   const lastModelRef = useRef<string | null>(null);
-
-  const {
-    rangeData,
-    viewData,
-    selectedRange,
-    setSelectedRange,
-    loading: signalsLoading,
-    error: signalsError,
-  } = useMushroomSignals(mushId);
+  const rawSynthAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (!mushId) return;
-    if (selectedRange !== range) setSelectedRange(range);
-  }, [mushId, range, selectedRange, setSelectedRange]);
+    if (!rawSynthUrl) return;
+    const audioEl = rawSynthAudioRef.current;
+    if (audioEl) {
+      audioEl.pause();
+      audioEl.src = rawSynthUrl;
+      audioEl.load();
+      audioEl
+        .play()
+        .catch(() => {
+          /* ignore autoplay rejection */
+        });
+    }
+    return () => {
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.removeAttribute("src");
+        audioEl.load();
+      }
+      URL.revokeObjectURL(rawSynthUrl);
+    };
+  }, [rawSynthUrl]);
 
-  const analysisSource = useMemo<SignalDatum[]>(
-    () => (rangeData.length ? rangeData : viewData),
-    [rangeData, viewData],
-  );
+  useEffect(() => {
+    let cancelled = false;
+    setCsvLoading(true);
+    setCsvError(null);
+
+    Papa.parse<{ timestamp_ms: number; signal: number }>(csvUrl, {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (cancelled) return;
+        setCsvLoading(false);
+        if (results.errors?.length) {
+          setCsvSamples([]);
+          setCsvError(results.errors[0]?.message ?? "Failed to parse CSV");
+          return;
+        }
+        const rows = (results.data ?? []).filter(
+          (row): row is { timestamp_ms: number; signal: number } =>
+            typeof row?.timestamp_ms === "number" &&
+            Number.isFinite(row.timestamp_ms) &&
+            typeof row?.signal === "number" &&
+            Number.isFinite(row.signal),
+        );
+        const mapped: SignalDatum[] = rows.map((row, index) => ({
+          index,
+          ms: row.timestamp_ms,
+          signal: row.signal,
+        }));
+        setCsvSamples(mapped);
+      },
+      error: (err) => {
+        if (cancelled) return;
+        setCsvLoading(false);
+        setCsvError(err.message ?? "CSV load error");
+      },
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [csvUrl]);
+
+  const analysisSource = csvSamples;
   const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
 
   const analysis: SignalWindowsAnalysis | null = useMemo(() => {
@@ -184,16 +270,16 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
   }, [samples]);
 
   const analysisSummary = useMemo(
-    () => describeAnalysis(analysis, range),
-    [analysis, range],
+    () => describeAnalysis(analysis),
+    [analysis],
   );
 
   const displayRange =
-    analysisSummary?.rangeLabel ?? RANGE_LABELS[range] ?? RANGE_LABELS[DEFAULT_RANGE];
+    csvUrl.replace(/^\/+/, "") || "CSV Source";
 
   const pickTrack = (resp: SunoStatusResponse): SunoTrack | undefined => {
-    const candidates: any[] = [];
-    const push = (value: any) => {
+    const candidates: unknown[] = [];
+    const push = (value: unknown) => {
       if (!value) return;
       if (Array.isArray(value)) {
         value.forEach(push);
@@ -206,7 +292,7 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
     push(resp?.response?.data);
     push(resp?.response);
     push(resp?.data);
-    push((resp as any)?.sunoData);
+    push(resp?.sunoData);
 
     const normalized = candidates
       .map(normalizeTrack)
@@ -259,23 +345,52 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
                 }
                 if (resolved?.audioUrl) {
                   setFullUrl((prev) => prev ?? resolved.audioUrl ?? null);
-                }
-              } else if (process.env.NODE_ENV !== "production") {
-                const errJson = await resolveRes.json().catch(() => null);
-                // eslint-disable-next-line no-console
-                console.warn(
-                  "[Suno] resolve-audio fallback failed",
-                  resolveRes.status,
-                  errJson,
-                );
               }
-            } catch (resolveErr) {
-              if (process.env.NODE_ENV !== "production") {
-                // eslint-disable-next-line no-console
-                console.warn("[Suno] resolve-audio error", resolveErr);
-              }
+            } else if (process.env.NODE_ENV !== "production") {
+              const errJson = await resolveRes.json().catch(() => null);
+              console.warn(
+                "[Suno] resolve-audio fallback failed",
+                resolveRes.status,
+                errJson,
+              );
+            }
+          } catch (resolveErr) {
+            if (process.env.NODE_ENV !== "production") {
+              console.warn("[Suno] resolve-audio error", resolveErr);
             }
           }
+        }
+        return json;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+    },
+    [],
+  );
+
+  const pollSynthStatus = useCallback(
+    async (taskId: string) => {
+      for (;;) {
+        const res = await fetch(
+          `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
+          { cache: "no-store" },
+        );
+        const json: SunoStatusResponse = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+
+        const picked = pickTrack(json);
+        if (picked) {
+          if (picked.streamAudioUrl) {
+            setSynthStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
+          }
+          if (picked.audioUrl) {
+            setSynthFullUrl((prev) => prev ?? picked.audioUrl ?? null);
+          }
+        }
+
+        setSynthStatus(json.status ?? "unknown");
+        if (json.status === "SUCCESS" || json.status === "FAIL") {
           return json;
         }
 
@@ -290,7 +405,7 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
 
     if (!analysis || !analysis.windows.length) {
       setError(
-        "Signal windows are still loading (or range too short). Try a larger range.",
+        "CSV data is still loading. Try again in a moment.",
       );
       setStatus("error");
       return;
@@ -394,31 +509,125 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
     }
   }, [analysis, busy, pollStatus]);
 
-  const signalLoadingState = signalsLoading && !analysis;
-  const disableButton = busy || !mushId || signalLoadingState || !analysis;
+  const onRenderSynth = useCallback(async () => {
+    if (synthBusy || synthUploadBusy) return;
+    if (!samples.length) {
+      setSynthError("No CSV data available yet. Check the file and try again.");
+      setSynthStatus("error");
+      return;
+    }
+
+    setSynthBusy(true);
+    setSynthError(null);
+    setSynthStatus("rendering");
+    setSynthStreamUrl(null);
+    setSynthFullUrl(null);
+    setRawSynthFile(null);
+    setRawSynthUrl(null);
+
+    try {
+      const { renderSynthMp3 } = await import("./sonification/renderSynth");
+
+      const file = await renderSynthMp3(
+        samples.map((sample) => ({
+          timestampMs: sample.timestampMs ?? 0,
+          signal: sample.signal,
+        })),
+        { durationSec: SYNTH_TARGET_DURATION_SEC },
+      );
+
+      setRawSynthFile(file);
+      const url = URL.createObjectURL(file);
+      setRawSynthUrl(url);
+      setSynthStatus("rendered");
+    } catch (err) {
+      setSynthError(err instanceof Error ? err.message : String(err));
+      setSynthStatus("error");
+    } finally {
+      setSynthBusy(false);
+    }
+  }, [synthBusy, synthUploadBusy, samples]);
+
+  const onUploadSynth = useCallback(async () => {
+    if (synthUploadBusy || synthBusy) return;
+    if (!rawSynthFile) {
+      setSynthError("Render the synth sonification first.");
+      setSynthStatus("error");
+      return;
+    }
+
+    setSynthUploadBusy(true);
+    setSynthError(null);
+    setSynthStatus("uploading");
+    setSynthStreamUrl(null);
+    setSynthFullUrl(null);
+
+    try {
+      const form = new FormData();
+      form.set("file", rawSynthFile);
+      if (mushId) {
+        form.set("title", `Mushroom ${mushId} Synth Sonification`);
+      } else {
+        form.set("title", "Ghost Fungi Synth Sonification");
+      }
+      const promptText =
+        analysisSummary?.windowCount != null
+          ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, where notes are louder add more spacey pads. No vocals or aggressive percussion.`
+          : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion.`;
+      form.set("prompt", promptText);
+      form.set("style", "synthetic soundcsape, experimental");
+
+      const uploadRes = await fetch("/api/suno/upload-sonification", {
+        method: "POST",
+        body: form,
+      });
+      const uploadJson = await uploadRes.json();
+      if (!uploadRes.ok || !uploadJson?.taskId) {
+        throw new Error(uploadJson?.error ?? "Failed to upload sonification");
+      }
+
+      setSynthStatus("queued");
+      await pollSynthStatus(uploadJson.taskId);
+    } catch (err) {
+      setSynthError(err instanceof Error ? err.message : String(err));
+      setSynthStatus("error");
+    } finally {
+      setSynthUploadBusy(false);
+    }
+  }, [
+    analysisSummary,
+    mushId,
+    synthBusy,
+    synthUploadBusy,
+    pollSynthStatus,
+    rawSynthFile,
+  ]);
+
+  const signalLoadingState = csvLoading && !analysis;
+  const disableButton = busy || csvLoading || !analysis;
+  const disableSynthRenderButton =
+    synthBusy || synthUploadBusy || csvLoading || !analysis || !samples.length;
+  const disableSynthUploadButton =
+    synthUploadBusy || synthBusy || !rawSynthFile;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Hear your Mushroom</CardTitle>
+        <CardTitle>Mushroom Sonification</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Generates music from the mushroom signal data via Suno. Source:{" "}
+          Let your mushroom sing.
           <span className="text-xs font-medium">
-            BigQuery • {displayRange}
-            {analysisSummary?.windowCount != null
-              ? ` • ${analysisSummary.windowCount} windows`
-              : ""}
-            {analysisSummary?.totalSamples != null
-              ? ` • ${analysisSummary.totalSamples} samples`
-              : ""}
+            Source: {displayRange}
+            {analysisSummary?.windowCount != null ? ` – ${analysisSummary.windowCount} windows` : ""}
+            {analysisSummary?.totalSamples != null ? ` – ${analysisSummary.totalSamples} samples` : ""}
           </span>
         </p>
 
-        {signalsError && (
+        {csvError && (
           <p className="text-xs text-rose-600">
-            Failed to load signals: {signalsError}
+            Failed to load CSV: {csvError}
           </p>
         )}
 
@@ -427,13 +636,48 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
           disabled={disableButton}
           className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          {busy ? "Working..." : mushId ? "Hear your Mushroom" : "Select a mushroom"}
+          {busy ? "Generating Suno track..." : "WIP"}
         </button>
 
         <div className="text-sm">
-          <div>Status: {signalLoadingState ? "loading signals..." : status}</div>
-          {error && <div className="text-rose-600">Error: {error}</div>}
+          <div>
+            <span className="font-medium">Suno status:</span>{" "}
+            {signalLoadingState ? "Loading CSV…" : status}
+          </div>
+          {error && <div className="text-rose-600 text-xs">{error}</div>}
         </div>
+
+        <button
+          onClick={onRenderSynth}
+          disabled={disableSynthRenderButton}
+          className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {synthBusy ? "Rendering synth preview…" : "Create synth preview"}
+        </button>
+
+        <button
+          onClick={onUploadSynth}
+          disabled={disableSynthUploadButton}
+          className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+        >
+          {synthUploadBusy ? "Uploading preview to Suno…" : "Enhance your Synth"}
+        </button>
+
+        <div className="text-sm">
+          <div>
+            <span className="font-medium">Preview status:</span> {synthStatus}
+          </div>
+          {synthError && <div className="text-rose-600 text-xs">{synthError}</div>}
+        </div>
+
+        {rawSynthUrl && (
+          <div className="space-y-1">
+            <div className="text-sm text-muted-foreground">Synth preview:</div>
+            <audio controls src={rawSynthUrl} ref={rawSynthAudioRef}>
+              Your browser does not support audio.
+            </audio>
+          </div>
+        )}
 
         {streamUrl && (
           <div className="space-y-1">
@@ -447,15 +691,26 @@ export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
         {fullUrl && (
           <div className="text-sm">
             <a className="underline" href={fullUrl} target="_blank" rel="noreferrer">
-              Open full MP3
+              Open full AI track
             </a>
           </div>
         )}
 
-        {!mushId && (
-          <p className="text-xs text-muted-foreground">
-            Pick a mushroom to enable sonification.
-          </p>
+        {synthStreamUrl && (
+          <div className="space-y-1">
+            <div className="text-sm text-muted-foreground">Synth streaming preview:</div>
+            <audio controls src={synthStreamUrl}>
+              Your browser does not support audio.
+            </audio>
+          </div>
+        )}
+
+        {synthFullUrl && (
+          <div className="text-sm">
+            <a className="underline" href={synthFullUrl} target="_blank" rel="noreferrer">
+              Open enhanced preview
+            </a>
+          </div>
         )}
       </CardContent>
     </Card>

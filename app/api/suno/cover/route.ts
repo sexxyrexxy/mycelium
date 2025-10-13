@@ -1,27 +1,7 @@
 // app/api/suno/cover/route.ts
 import { NextResponse } from "next/server";
 import { authHeaders } from "@/lib/suno";
-
-// (A) upload the file via Suno's File Upload API (stream)
-async function uploadFileToSuno(file: File) {
-  const form = new FormData();
-  form.set("uploadPath", "user-uploads");           // any folder name
-  form.set("fileName", file.name || "piano.wav");   // keep .wav
-  form.set("file", file);
-
-  const up = await fetch("https://sunoapiorg.redpandaai.co/api/file-stream-upload", {
-    method: "POST",
-    headers: { Authorization: authHeaders().Authorization }, // Bearer ...
-    body: form,
-  });
-  const txt = await up.text();
-  let json: any = null;
-  try { json = txt ? JSON.parse(txt) : null; } catch {}
-  if (!up.ok || !json?.data?.downloadUrl) {
-    throw new Error(`Upload failed: ${json?.msg ?? up.status} ${txt?.slice(0,200)}`);
-  }
-  return json.data.downloadUrl as string; // temporary public URL
-}
+import { uploadFileToSuno } from "@/lib/sunoUpload";
 
 // (B) call Upload-and-Cover
 export async function POST(req: Request) {

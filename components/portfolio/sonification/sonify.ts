@@ -311,8 +311,6 @@ export function makeExtendPlanFromAnalysis(
   const segmentsCount = groupedWindows.length;
 
   return groupedWindows.map((group, index) => {
-    const representative =
-      group[Math.floor(group.length / 2)] ?? group[0] ?? windows[0];
     const { eLabel, sLabel } = summarizeSegment(group);
     const directive = buildSegmentDirective(
       index,
