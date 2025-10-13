@@ -1,108 +1,251 @@
-'use client';
+// components/portfolio/sonification/SonificationPanel.tsx
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { loadCsv, startPiano, stopPiano } from '@/components/portfolio/sonification/sonify';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  useMushroomSignals,
+  type TimelineRange,
+  type SignalDatum,
+} from "@/hooks/useMushroomSignals";
+import { classifySignalWindows, type SignalWindowsAnalysis } from "@/lib/signalClassification";
 
-type Props = { csvUrl?: string };
+type Props = {
+  mushId?: string | null;
+  range?: TimelineRange;
+};
 
-export function SonificationPanel({ csvUrl = '/GhostFungi.csv' }: Props) {
-  const [loaded, setLoaded] = useState(false);
+type SunoTrack = {
+  id: string;
+  audioUrl?: string;
+  streamAudioUrl?: string;
+  title?: string;
+  tags?: string;
+  duration?: number;
+};
+
+type SunoStatusResponse = {
+  status: string;
+  response?: { sunoData?: SunoTrack[] };
+};
+
+const RANGE_LABELS: Record<TimelineRange, string> = {
+  rt: "Real Time",
+  "4h": "Last 4 Hours",
+  "12h": "Last 12 Hours",
+  "1d": "Last Day",
+  "3d": "Last 3 Days",
+  "1w": "Last Week",
+  all: "All Time",
+};
+
+const DEFAULT_RANGE: TimelineRange = "1d";
+
+function toSamples(data: SignalDatum[]): { samples: { signal: number; timestampMs: number }[] } {
+  if (!data.length) {
+    return { samples: [] };
+  }
+  const samples = data.map((datum) => ({
+    signal: datum.signal,
+    timestampMs: datum.ms,
+  }));
+  return { samples };
+}
+
+function describeAnalysis(analysis: SignalWindowsAnalysis | null, range: TimelineRange) {
+  if (!analysis) return null;
+  const startMs = analysis.windows[0]?.startMs ?? 0;
+  const endMs = analysis.windows.at(-1)?.endMs ?? startMs;
+  const durationMs = Math.max(endMs - startMs, 0);
+  const hours = durationMs ? durationMs / (1000 * 60 * 60) : null;
+  return {
+    rangeLabel: RANGE_LABELS[range] ?? range.toUpperCase(),
+    totalSamples: analysis.globalStats.count,
+    windowCount: analysis.windows.length,
+    hours,
+  };
+}
+
+export function SonificationPanel({ mushId, range = DEFAULT_RANGE }: Props) {
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [fullUrl, setFullUrl] = useState<string | null>(null);
+  const taskIdRef = useRef<string | null>(null);
 
-  // Global unlock fallback: resume context on first interaction anywhere
+  const {
+    rangeData,
+    viewData,
+    selectedRange,
+    setSelectedRange,
+    loading: signalsLoading,
+    error: signalsError,
+  } = useMushroomSignals(mushId);
+
   useEffect(() => {
-    const handler = async () => {
-      try {
-        const Tone = await import('tone');
-        await Tone.start();
-        const ctx = Tone.getContext().rawContext;
-        if (ctx.state !== 'running') await ctx.resume();
-      } catch {}
-      window.removeEventListener('pointerdown', handler as any, true);
-      window.removeEventListener('keydown', handler as any, true);
-    };
-    window.addEventListener('pointerdown', handler as any, true);
-    window.addEventListener('keydown', handler as any, true);
-    return () => {
-      window.removeEventListener('pointerdown', handler as any, true);
-      window.removeEventListener('keydown', handler as any, true);
-    };
-  }, []);
+    if (!mushId) return;
+    if (selectedRange !== range) {
+      setSelectedRange(range);
+    }
+  }, [mushId, range, selectedRange, setSelectedRange]);
 
-  // Stop any scheduled audio when the component unmounts
-  useEffect(() => {
-    return () => {
-      try { stopPiano(); } catch {}
-    };
-  }, []);
+  const analysisSource = useMemo<SignalDatum[]>(
+    () => (rangeData.length ? rangeData : viewData),
+    [rangeData, viewData]
+  );
 
-  const onStart = async () => {
+  const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
+
+  const analysis: SignalWindowsAnalysis | null = useMemo(() => {
+    if (!samples.length) return null;
+    return classifySignalWindows(samples);
+  }, [samples]);
+
+  const analysisSummary = useMemo(
+    () => describeAnalysis(analysis, range),
+    [analysis, range]
+  );
+
+  const displayRange = analysisSummary?.rangeLabel ?? RANGE_LABELS[range] ?? RANGE_LABELS[DEFAULT_RANGE];
+
+  const onHear = useCallback(async () => {
     if (busy) return;
+    if (!analysis || !analysis.windows.length) {
+      setError("Signal windows are still loading. Try again shortly.");
+      setStatus("error");
+      return;
+    }
+
     setBusy(true);
+    setError(null);
+    setStatus("preparing");
+    setStreamUrl(null);
+    setFullUrl(null);
+    taskIdRef.current = null;
+
     try {
-      // Import Tone only on user click to avoid autoplay warnings on page load
-      const Tone = await import('tone');
-      await Tone.start();
-      const ctx = Tone.getContext().rawContext;
-      if (ctx.state !== 'running') await ctx.resume();
-      // Snappier first note
-      Tone.getContext().lookAhead = 0.02;
-
-      // Load the CSV once
-      if (!loaded) {
-        const summary = await loadCsv(csvUrl);
-        console.log('CSV summary:', summary);
-        setLoaded(true);
+      const mod = await import("@/components/portfolio/sonification/sonify");
+      if (typeof mod.mapSignalToSuno !== "function") {
+        console.error("sonify exports:", Object.keys(mod));
+        throw new Error("mapSignalToSuno is not exported from sonify.ts");
       }
+      const body = mod.mapSignalToSuno(analysis);
 
-      // Start piano sonification with sane defaults (audible notes)
-      await startPiano({
-        timeCompression: 5,
-        smoothingWindow: 5,
-        stepRateHz: 3,
-        scaleMidiLow: 48,   // C3
-        scaleMidiHigh: 84,  // C6
-        velocity: 0.9,
-        noteLenSec: 0.25,
-        reverbWet: 0.2,
+      const genRes = await fetch("/api/suno/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
+      const genJson = await genRes.json();
+      if (!genRes.ok || !genJson?.taskId) {
+        throw new Error(genJson?.error ?? "Failed to start Suno generation");
+      }
+      taskIdRef.current = genJson.taskId;
+      setStatus("queued");
+
+      let keepPolling = true;
+      while (keepPolling) {
+        const tid = taskIdRef.current!;
+        const res = await fetch(`/api/suno/status?taskId=${encodeURIComponent(tid)}`, {
+          cache: "no-store",
+        });
+        const data: SunoStatusResponse = await res.json();
+
+        if (!res.ok) {
+          throw new Error((data as any)?.error ?? "Status request failed");
+        }
+
+        setStatus(data.status ?? "unknown");
+
+        const track = data?.response?.sunoData?.[0];
+        if (track?.streamAudioUrl) {
+          setStreamUrl((prev) => prev ?? track.streamAudioUrl ?? null);
+        }
+        if (track?.audioUrl) {
+          setFullUrl((prev) => prev ?? track.audioUrl ?? null);
+        }
+
+        if (data.status === "SUCCESS" || data.status === "FAIL") {
+          keepPolling = false;
+        } else {
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
     } catch (e: any) {
-      alert(`Failed: ${e?.message || e}`);
+      setError(e?.message ?? String(e));
+      setStatus("error");
     } finally {
       setBusy(false);
     }
-  };
+  }, [analysis, busy]);
 
-  const onStop = () => {
-    try { stopPiano(); } catch {}
-  };
+  useEffect(() => {
+    return () => {
+      taskIdRef.current = null;
+    };
+  }, []);
+
+  const signalLoadingState = signalsLoading && !analysis;
+  const disableButton = busy || !mushId || signalLoadingState || !analysis;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Hear It!</CardTitle>
+        <CardTitle>Hear your Mushroom</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Play the mushroom’s electrical signals as a piano. Source: <code>{csvUrl}</code>
+          Generates music from your mushroom’s electrical signals via Suno. Source:{" "}
+          <span className="text-xs font-medium">
+            BigQuery · {displayRange}
+            {analysisSummary?.windowCount != null ? ` · ${analysisSummary.windowCount} windows` : ""}
+            {analysisSummary?.totalSamples != null ? ` · ${analysisSummary.totalSamples} samples` : ""}
+          </span>
         </p>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={onStart}
-            className="px-3 py-1.5 rounded-md bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50"
-            disabled={busy}
-          >
-            {busy ? 'Starting…' : 'Start'}
-          </button>
-          <button
-            onClick={onStop}
-            className="px-3 py-1.5 rounded-md bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
-            disabled={busy}
-          >
-            Stop
-          </button>
+
+        {signalsError && (
+          <p className="text-xs text-rose-600">
+            Failed to load signals: {signalsError}
+          </p>
+        )}
+
+        <button
+          onClick={onHear}
+          disabled={disableButton}
+          className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {busy ? "Working…" : mushId ? "Hear your Mushroom" : "Select a mushroom"}
+        </button>
+
+        <div className="text-sm">
+          <div>Status: {signalLoadingState ? "loading signals…" : status}</div>
+          {error && <div className="text-rose-600">Error: {error}</div>}
         </div>
+
+        {streamUrl && (
+          <div className="space-y-1">
+            <div className="text-sm text-muted-foreground">Streaming preview:</div>
+            <audio controls src={streamUrl}>
+              Your browser does not support audio.
+            </audio>
+          </div>
+        )}
+
+        {fullUrl && (
+          <div className="text-sm">
+            <a className="underline" href={fullUrl} target="_blank" rel="noreferrer">
+              Open full MP3
+            </a>
+          </div>
+        )}
+
+        {!mushId && (
+          <p className="text-xs text-muted-foreground">
+            Pick a mushroom to enable sonification.
+          </p>
+        )}
       </CardContent>
     </Card>
   );

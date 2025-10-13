@@ -11,6 +11,13 @@ import {
 import { SignalTimeRangeSelector } from "@/components/portfolio/SignalTimeRangeSelector";
 import { SignalRiver } from "@/components/portfolio/SignalRiver";
 import { Loader2, RotateCcw } from "lucide-react";
+import {
+  classifySignalWindows,
+  type SignalSampleInput,
+  type SignalWindowsAnalysis,
+} from "@/lib/signalClassification";
+
+import MushroomLifeCycle from "@/components/portfolio/MushroomLifeCycle";
 
 const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "rt",
@@ -21,15 +28,6 @@ const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "1w",
   "all",
 ];
-
-const blankSegment = () => ({
-  start: null as string | null,
-  end: null as string | null,
-  count: 0,
-  sum: 0,
-  max: -Infinity,
-  min: Infinity,
-});
 
 type StoryCard = {
   id: number;
@@ -52,77 +50,46 @@ const formatTime = (iso: string) =>
 const formatRangeLabel = (start: string, end: string) =>
   `${formatTime(start)} – ${formatTime(end)}`;
 
-const buildNarrative = (
-  avg: number,
-  swing: number,
-  peak: number,
-  trough: number,
-  baseline: number,
-  variation: number,
-  start: string,
-  end: string,
-  count: number,
-  inProgress: boolean
-) => {
-  const diff = avg - baseline;
-  const guard = variation || Math.max(Math.abs(diff), 1);
-
-  const classifications = [
-    {
-      id: "surge",
-      condition: diff > (variation || guard) * 0.65,
-      title: "Energy surge",
-      mood: "buzzing with excitement",
-      message: `Signals ran ${diff.toFixed(
-        1
-      )} mV above baseline from ${formatTime(start)} to ${formatTime(end)}.`,
-    },
-    {
-      id: "rest",
-      condition: diff < -(variation || guard) * 0.65,
-      title: "Resting pulse",
-      mood: "curling up for a nap",
-      message: `Readings softened by about ${Math.abs(diff).toFixed(
-        1
-      )} mV during this window.`,
-    },
-    {
-      id: "flutter",
-      condition: swing > (variation || guard) * 1.4,
-      title: "Signal flutter",
-      mood: "twitchy and reactive",
-      message: `Pulse leapt between ${trough.toFixed(1)} and ${peak.toFixed(
-        1
-      )} mV—lots of little bursts.`,
-    },
-    {
-      id: "calm",
-      condition: swing < (variation || guard) * 0.4,
-      title: "Quiet stream",
-      mood: "settling into calm waters",
-      message: `Signals stayed smooth, rarely dipping below ${trough.toFixed(
-        1
-      )} mV.`,
-    },
-  ];
-
-  const defaultClass = {
-    id: "steady",
-    title: "Steady flow",
-    mood: "coasting comfortably",
-    message: `Between ${formatRangeLabel(
-      start,
-      end
-    )} the colony drifted close to its usual pulse.`,
-  };
-
-  const chosen = classifications.find((cls) => cls.condition) ?? defaultClass;
-
-  let summary = chosen.message;
-  if (inProgress) summary += " Stream is still flowing…";
-
-  return { title: chosen.title, summary, mood: chosen.mood };
+const describeWindowSummary = (window: SignalWindowsAnalysis["windows"][number], inProgress: boolean) => {
+  const windowLabel = formatRangeLabel(window.startISO, window.endISO);
+  const energyLabel =
+    window.energyLevel === "low"
+      ? "Low energy"
+      : window.energyLevel === "medium"
+        ? "Medium energy"
+        : "High energy";
+  const volatilityLabel =
+    window.volatility === "stable"
+      ? "Stable movement"
+      : window.volatility === "fluctuating"
+        ? "Fluctuating movement"
+        : "Spiking movement";
+  const baseSummary =
+    `${energyLabel} during ${windowLabel}; average absolute signal ${window.localAvg.toFixed(3)} mV. ` +
+    `${volatilityLabel}, normalised variance ${window.normalizedVariance.toFixed(2)}.`;
+  const audioSummary =
+    `Audio guidance: ${window.audio.layers} layer(s), ` +
+    `${window.audio.brightness} tone, modulation depth ${(window.audio.modulationDepth * 100).toFixed(0)}%.`;
+  const peakNote = window.peak ? "Peak energy — add shimmer without raising volume." : "";
+  const flowNote = inProgress ? "Window is still streaming…" : "Window complete.";
+  return `${baseSummary} ${audioSummary} ${peakNote} ${flowNote}`.trim();
 };
+
+const windowToStory = (
+  window: SignalWindowsAnalysis["windows"][number],
+  inProgress: boolean,
+  progress: number
+): StoryCard => ({
+  id: window.index + 1,
+  title: window.combinedLabel,
+  summary: describeWindowSummary(window, inProgress),
+  mood: `Energy ${window.energyLevel}; movement ${window.volatility}`,
+  start: window.startISO,
+  end: window.endISO,
+  avg: window.localAvg,
+  swing: window.normalizedVariance,
+  progress: inProgress ? progress : undefined,
+});
 
 export default function SignalRiverTab() {
   const { id } = useParams<{ id: string }>();
@@ -152,13 +119,27 @@ export default function SignalRiverTab() {
   const [currentStory, setCurrentStory] = useState<StoryCard | null>(null);
   const [history, setHistory] = useState<StoryCard[]>([]);
   const [streamFinished, setStreamFinished] = useState(false);
+  const windowIndexRef = useRef(0);
 
-  const segmentRef = useRef(blankSegment());
-  const storyIdRef = useRef(1);
+  const analysisSource = useMemo(
+    () => (rangeData.length ? rangeData : data),
+    [rangeData, data]
+  );
+
+  const samples = useMemo<SignalSampleInput[]>(() => {
+    return analysisSource.map((datum) => ({
+      signal: datum.signal,
+      timestampMs: datum.ms,
+    }));
+  }, [analysisSource]);
+
+  const analysis = useMemo<SignalWindowsAnalysis | null>(() => {
+    if (!samples.length) return null;
+    return classifySignalWindows(samples);
+  }, [samples]);
 
   const resetStories = useCallback(() => {
-    segmentRef.current = blankSegment();
-    storyIdRef.current = 1;
+    windowIndexRef.current = 0;
     setCurrentStory(null);
     setHistory([]);
     setStreamFinished(false);
@@ -173,112 +154,60 @@ export default function SignalRiverTab() {
     setReplayToken((token) => token + 1);
   }, [selectedRange, resetStories, setSelectedRange]);
 
-  const globalStats = useMemo(() => {
-    if (!data.length) return { avg: 0, std: 0 };
-    const avg = data.reduce((acc, d) => acc + d.signal, 0) / data.length;
-    const variance =
-      data.reduce((acc, d) => acc + Math.pow(d.signal - avg, 2), 0) /
-      data.length;
-    return { avg, std: Math.sqrt(variance) };
-  }, [data]);
-
-  const targetPoints = useMemo(() => {
-    if (!data.length) return 40;
-    const estimate = Math.round(data.length / 12);
-    return Math.min(80, Math.max(20, estimate || 20));
-  }, [data.length]);
-
-  const finalizeSegment = useCallback(
-    (seg: ReturnType<typeof blankSegment>) => {
-      if (!seg.start || !seg.end || !seg.count) return null;
-      const avg = seg.sum / seg.count;
-      const swing = seg.max - seg.min;
-      const { title, summary, mood } = buildNarrative(
-        avg,
-        swing,
-        seg.max,
-        seg.min,
-        globalStats.avg,
-        globalStats.std,
-        seg.start,
-        seg.end,
-        seg.count,
-        false
-      );
-      return {
-        id: storyIdRef.current++,
-        title,
-        summary,
-        mood,
-        start: seg.start,
-        end: seg.end,
-        avg,
-        swing,
-      } satisfies StoryCard;
-    },
-    [globalStats]
-  );
+useEffect(() => {
+  resetStories();
+  if (analysis) {
+    setReplayToken((token) => token + 1);
+  }
+}, [analysis, resetStories]);
 
   const handleSample = useCallback(
     (sample: SignalDatum | null) => {
-      if (!sample) {
-        if (segmentRef.current.count) {
-          const finished = finalizeSegment(segmentRef.current);
-          if (finished) setHistory((prev) => [finished, ...prev].slice(0, 8));
-          segmentRef.current = blankSegment();
-          setCurrentStory(null);
+      if (!analysis || !analysis.windows.length) {
+        if (!sample) {
+          setStreamFinished(true);
         }
+        setCurrentStory(null);
+        return;
+      }
+
+      const windows = analysis.windows;
+
+      if (!sample) {
+        if (windowIndexRef.current < windows.length) {
+          const remaining = windows
+            .slice(windowIndexRef.current)
+            .map((window) => windowToStory(window, false, 1));
+          setHistory((prev) => [...remaining.reverse(), ...prev]);
+        }
+        windowIndexRef.current = windows.length;
+        setCurrentStory(null);
         setStreamFinished(true);
         return;
       }
 
-      const seg = segmentRef.current;
-      if (!seg.start) {
-        seg.start = sample.timestamp;
-        seg.max = sample.signal;
-        seg.min = sample.signal;
+      let idx = windowIndexRef.current;
+      while (idx < windows.length && sample.ms >= windows[idx].endMs) {
+        const completedWindow = windows[idx];
+        setHistory((prev) => [windowToStory(completedWindow, false, 1), ...prev]);
+        idx += 1;
       }
-      seg.end = sample.timestamp;
-      seg.count += 1;
-      seg.sum += sample.signal;
-      seg.max = Math.max(seg.max, sample.signal);
-      seg.min = Math.min(seg.min, sample.signal);
 
-      const avg = seg.sum / seg.count;
-      const swing = seg.max - seg.min;
-      const { title, summary, mood } = buildNarrative(
-        avg,
-        swing,
-        seg.max,
-        seg.min,
-        globalStats.avg,
-        globalStats.std,
-        seg.start!,
-        seg.end!,
-        seg.count,
-        true
-      );
+      windowIndexRef.current = idx;
 
-      setCurrentStory({
-        id: storyIdRef.current,
-        title,
-        summary,
-        mood,
-        start: seg.start!,
-        end: seg.end!,
-        avg,
-        swing,
-        progress: Math.min(seg.count / targetPoints, 0.99),
-      });
-
-      if (seg.count >= targetPoints) {
-        const finished = finalizeSegment(seg);
-        if (finished) setHistory((prev) => [finished, ...prev].slice(0, 8));
-        segmentRef.current = blankSegment();
+      if (idx < windows.length) {
+        const activeWindow = windows[idx];
+        const windowDuration = Math.max(activeWindow.endMs - activeWindow.startMs, 1);
+        const progress = Math.max(
+          0,
+          Math.min(1, (sample.ms - activeWindow.startMs) / windowDuration)
+        );
+        setCurrentStory(windowToStory(activeWindow, true, progress));
+      } else {
         setCurrentStory(null);
       }
     },
-    [finalizeSegment, globalStats, targetPoints]
+    [analysis]
   );
 
   const handleReplay = useCallback(() => {
@@ -304,9 +233,16 @@ export default function SignalRiverTab() {
         />
       </div>
 
-      <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
-        {isRefetching ? <Loader2 className="size-3 animate-spin" /> : null}
-        <span>{options.find((opt) => opt.id === selectedRange)?.label}</span>
+      <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+        <div className="flex items-center gap-2">
+          {isRefetching ? <Loader2 className="size-3 animate-spin" /> : null}
+          <span>{options.find((opt) => opt.id === selectedRange)?.label}</span>
+        </div>
+        {analysis?.windows.length ? (
+          <span className="text-muted-foreground">
+            Windows: {analysis.windows.length}
+          </span>
+        ) : null}
       </div>
 
       <div className="relative grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -372,6 +308,10 @@ export default function SignalRiverTab() {
               Listening for the next movement…
             </p>
           )}
+          {/* Mushroom Phase*/}
+          <div className="">
+            <MushroomLifeCycle />
+          </div>
         </aside>
       </div>
 
