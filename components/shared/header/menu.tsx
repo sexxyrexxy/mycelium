@@ -16,7 +16,6 @@ const Menu = () => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false); // Variable to toggle user dropdown
 
   useEffect(() => {
-
     // Checks if a user is logged in
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
@@ -77,17 +76,19 @@ const Menu = () => {
             Portfolio
           </Link>
         </Button>
-        <Button asChild variant="ghost">
+        {/* <Button asChild variant="ghost">
           <Link
             href="/community"
             className="text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl"
           >
             Community
           </Link>
-        </Button>
+        </Button> */}
 
         {/* User Button */}
-        <div className="inline-block relative"> {/* <- inline-block to fit button width */}
+        <div className="inline-block relative">
+          {" "}
+          {/* <- inline-block to fit button width */}
           <Button
             asChild
             className="bg-[#564930] hover:bg-[#C89E4D] text-white font-bold rounded-full"
@@ -106,7 +107,6 @@ const Menu = () => {
               </Link>
             )}
           </Button>
-
           {/* Dropdown */}
           {userDropdownOpen && user && (
             <div className="absolute top-full left-0 mt-1 bg-white shadow-lg rounded-lg w-full z-50">
