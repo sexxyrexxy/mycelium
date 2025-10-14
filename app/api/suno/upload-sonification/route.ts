@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       form.get("title") ?? "Mushroom Synth Sonification",
     ).slice(0, 80);
     const style = String(
-      form.get("style") ?? "ambient synth, organic textures",
+      form.get("style") ?? "synthetic soundscape, ambient",
     ).slice(0, 120);
     const prompt =
       String(
