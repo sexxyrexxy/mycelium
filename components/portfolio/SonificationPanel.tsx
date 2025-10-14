@@ -646,10 +646,11 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       }
       const promptText =
         analysisSummary?.windowCount != null
-          ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
+          ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from  mushroom signals. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
           : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion. Duration around two minutes.`;
       form.set("prompt", promptText);
-      form.set("style", "synthwave, ambient");
+      form.set("style", "80s-synthwave, ambient"); 
+      console.log(promptText)
 
       const uploadRes = await fetch("/api/suno/upload-sonification", {
         method: "POST",
