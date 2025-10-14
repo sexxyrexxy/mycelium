@@ -1,4 +1,4 @@
-// components/portfolio/sonification/SonificationPanel.tsx
+﻿// components/portfolio/sonification/SonificationPanel.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -8,6 +8,7 @@ import {
   classifySignalWindows,
   type SignalWindowsAnalysis,
 } from "@/lib/signalClassification";
+import { useMushroomSignals } from "@/hooks/useMushroomSignals";
 
 type SonifyModule = typeof import("./sonification/sonify");
 
@@ -138,8 +139,32 @@ function toSamples(data: SignalDatum[]) {
   };
 }
 
+function humanizeRangeLabel(range?: string | null) {
+  switch ((range ?? "").toLowerCase()) {
+    case "rt":
+      return "Database - Real Time";
+    case "4h":
+      return "Database - Last 4 Hours";
+    case "12h":
+      return "Database - Last 12 Hours";
+    case "1d":
+      return "Database - Last Day";
+    case "3d":
+      return "Database - Last 3 Days";
+    case "1w":
+      return "Database - Last Week";
+    case "all":
+      return "Database - All Time";
+    case "csv":
+      return "CSV Source";
+    default:
+      return range ? `Database - ${range.toUpperCase()}` : "Database - Signals";
+  }
+}
+
 function describeAnalysis(
   analysis: SignalWindowsAnalysis | null,
+  label: string,
 ) {
   if (!analysis) return null;
   const startMs = analysis.windows[0]?.startMs ?? 0;
@@ -147,7 +172,7 @@ function describeAnalysis(
   const durationMs = Math.max(endMs - startMs, 0);
   const hours = durationMs ? durationMs / (1000 * 60 * 60) : null;
   return {
-    rangeLabel: "CSV Source",
+    rangeLabel: label,
     totalSamples: analysis.globalStats.count,
     windowCount: analysis.windows.length,
     hours,
@@ -170,12 +195,27 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const [rawSynthUrl, setRawSynthUrl] = useState<string | null>(null);
   const [synthUploadBusy, setSynthUploadBusy] = useState(false);
   const [csvSamples, setCsvSamples] = useState<SignalDatum[]>([]);
-  const [csvLoading, setCsvLoading] = useState(true);
+  const [csvLoading, setCsvLoading] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
+
+  const {
+    viewData: fetchedViewData,
+    loading: fetchedLoading,
+    error: fetchedError,
+    selectedRange,
+    setSelectedRange,
+  } = useMushroomSignals(mushId ?? null);
 
   const lastAudioIdRef = useRef<string | null>(null);
   const lastModelRef = useRef<string | null>(null);
   const rawSynthAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!mushId) return;
+    if (selectedRange !== "all") {
+      setSelectedRange("all");
+    }
+  }, [mushId, selectedRange, setSelectedRange]);
 
   useEffect(() => {
     if (!rawSynthUrl) return;
@@ -201,9 +241,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   }, [rawSynthUrl]);
 
   useEffect(() => {
+    if (mushId) return;
+
     let cancelled = false;
     setCsvLoading(true);
     setCsvError(null);
+    setCsvSamples([]);
 
     Papa.parse<{ timestamp_ms: number; signal: number }>(csvUrl, {
       download: true,
@@ -231,10 +274,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           signal: row.signal,
         }));
         setCsvSamples(mapped);
+        setCsvError(null);
       },
       error: (err) => {
         if (cancelled) return;
         setCsvLoading(false);
+        setCsvSamples([]);
         setCsvError(err.message ?? "CSV load error");
       },
     });
@@ -242,9 +287,39 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [csvUrl]);
+  }, [mushId, csvUrl]);
 
-  const analysisSource = csvSamples;
+  const csvLabel = useMemo(
+    () => csvUrl.replace(/^\/+/, "") || "CSV Source",
+    [csvUrl],
+  );
+
+  const dbSignalData = useMemo<SignalDatum[]>(
+    () =>
+      fetchedViewData.map((point, index) => {
+        const parsedMs = Number.isFinite(point.ms)
+          ? point.ms
+          : Number.isFinite(Date.parse(point.timestamp))
+            ? Date.parse(point.timestamp)
+            : index;
+        return {
+          index,
+          ms: parsedMs,
+          signal: point.signal,
+        };
+      }),
+    [fetchedViewData],
+  );
+
+  const usingDatabase = Boolean(mushId);
+  const signalData = usingDatabase ? dbSignalData : csvSamples;
+  const signalLoading = usingDatabase ? fetchedLoading : csvLoading;
+  const signalError = usingDatabase ? fetchedError ?? null : csvError;
+  const sourceLabel = usingDatabase
+    ? humanizeRangeLabel(selectedRange)
+    : csvLabel;
+
+  const analysisSource = signalData;
   const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
 
   const analysis: SignalWindowsAnalysis | null = useMemo(() => {
@@ -270,12 +345,13 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   }, [samples]);
 
   const analysisSummary = useMemo(
-    () => describeAnalysis(analysis),
-    [analysis],
+    () => describeAnalysis(analysis, sourceLabel),
+    [analysis, sourceLabel],
   );
 
-  const displayRange =
-    csvUrl.replace(/^\/+/, "") || "CSV Source";
+  const displayRange = analysisSummary?.rangeLabel ?? sourceLabel;
+  const displaySource =
+    usingDatabase && mushId ? `${displayRange} (Mushroom ${mushId})` : displayRange;
 
   const pickTrack = (resp: SunoStatusResponse): SunoTrack | undefined => {
     const candidates: unknown[] = [];
@@ -404,9 +480,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     if (busy) return;
 
     if (!analysis || !analysis.windows.length) {
-      setError(
-        "CSV data is still loading. Try again in a moment.",
-      );
+      setError("Signal data is still loading. Try again in a moment.");
       setStatus("error");
       return;
     }
@@ -512,7 +586,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const onRenderSynth = useCallback(async () => {
     if (synthBusy || synthUploadBusy) return;
     if (!samples.length) {
-      setSynthError("No CSV data available yet. Check the file and try again.");
+      setSynthError("No signal data available yet. Check the source and try again.");
       setSynthStatus("error");
       return;
     }
@@ -572,10 +646,10 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       }
       const promptText =
         analysisSummary?.windowCount != null
-          ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, where notes are louder add more spacey pads. No vocals or aggressive percussion.`
-          : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion.`;
+          ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
+          : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion. Duration around two minutes.`;
       form.set("prompt", promptText);
-      form.set("style", "synthetic soundcsape, experimental");
+      form.set("style", "synthetic soundscape, ambient");
 
       const uploadRes = await fetch("/api/suno/upload-sonification", {
         method: "POST",
@@ -603,10 +677,10 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     rawSynthFile,
   ]);
 
-  const signalLoadingState = csvLoading && !analysis;
-  const disableButton = busy || csvLoading || !analysis;
+  const signalLoadingState = signalLoading && !analysis;
+  const disableButton = busy || signalLoading || !analysis;
   const disableSynthRenderButton =
-    synthBusy || synthUploadBusy || csvLoading || !analysis || !samples.length;
+    synthBusy || synthUploadBusy || signalLoading || !analysis || !samples.length;
   const disableSynthUploadButton =
     synthUploadBusy || synthBusy || !rawSynthFile;
 
@@ -618,16 +692,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
           Let your mushroom sing.
-          <span className="text-xs font-medium">
-            Source: {displayRange}
-            {analysisSummary?.windowCount != null ? ` – ${analysisSummary.windowCount} windows` : ""}
-            {analysisSummary?.totalSamples != null ? ` – ${analysisSummary.totalSamples} samples` : ""}
-          </span>
+          <span className="text-xs font-medium">Source: {displaySource}</span>
         </p>
 
-        {csvError && (
+        {signalError && (
           <p className="text-xs text-rose-600">
-            Failed to load CSV: {csvError}
+            Failed to load signals: {signalError}
           </p>
         )}
 
@@ -636,13 +706,13 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           disabled={disableButton}
           className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
         >
-          {busy ? "Generating Suno track..." : "WIP"}
+          {busy ? "Generating track..." : "WIP"}
         </button>
 
         <div className="text-sm">
           <div>
             <span className="font-medium">Suno status:</span>{" "}
-            {signalLoadingState ? "Loading CSV…" : status}
+            {signalLoadingState ? "Loading signals..." : status}
           </div>
           {error && <div className="text-rose-600 text-xs">{error}</div>}
         </div>
@@ -652,7 +722,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           disabled={disableSynthRenderButton}
           className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
         >
-          {synthBusy ? "Rendering synth preview…" : "Create synth preview"}
+          {synthBusy ? "Rendering synth..." : "Synth"}
         </button>
 
         <button
@@ -660,7 +730,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           disabled={disableSynthUploadButton}
           className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
         >
-          {synthUploadBusy ? "Uploading preview to Suno…" : "Enhance your Synth"}
+          {synthUploadBusy ? "Adding groove..." : "Synth Jam"}
         </button>
 
         <div className="text-sm">

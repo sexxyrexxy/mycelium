@@ -17,7 +17,7 @@ type SynthEvent = {
   duration: number;
 };
 
-const MIN_FREQ = 110; // A2
+const MIN_FREQ = 110; // A2 suggested 
 const MAX_FREQ = 880; // A5
 
 function clamp(value: number, min: number, max: number) {
@@ -40,15 +40,26 @@ function buildSynthEvents(
   const indexStep = (samples.length - 1) / Math.max(steps - 1, 1);
 
   const events: SynthEvent[] = [];
+  let prevAverage = samples[0]?.signal ?? 0;
 
   for (let i = 0; i < steps; i += 1) {
-    const sourceIndex = Math.floor(i * indexStep);
-    const sample = samples[clamp(sourceIndex, 0, samples.length - 1)];
-    const prevSample =
-      samples[clamp(sourceIndex - 1, 0, samples.length - 1)] ?? sample;
-    const delta = sample.signal - prevSample.signal;
+    const windowStart = clamp(Math.floor(i * indexStep), 0, samples.length - 1);
+    const windowEnd =
+      i === steps - 1
+        ? samples.length - 1
+        : clamp(Math.floor((i + 1) * indexStep), windowStart, samples.length - 1);
 
-    const norm = clamp((sample.signal - min) / range, 0, 1);
+    let sum = 0;
+    let count = 0;
+    for (let index = windowStart; index <= windowEnd; index += 1) {
+      sum += samples[index].signal;
+      count += 1;
+    }
+
+    const average = count > 0 ? sum / count : samples[windowStart].signal;
+    const delta = average - prevAverage;
+
+    const norm = clamp((average - min) / range, 0, 1);
     const velocityNorm = clamp(Math.abs(delta) / (range || 1), 0, 1);
 
     const frequency = MIN_FREQ + norm * (MAX_FREQ - MIN_FREQ);
@@ -61,6 +72,8 @@ function buildSynthEvents(
       velocity,
       duration,
     });
+
+    prevAverage = average;
   }
 
   return events;
