@@ -1,13 +1,13 @@
 # Mycelium Signal Studio
 
-Mycelium Signal Studio is an experimental Next.js 15 application for visualising electrical activity captured from cultivated mushrooms. It turns timestamped `Signal_mV` readings into expressive, biology-inspired narratives – from classic time-series dashboards to immersive visuals such as the **Signal River** particle stream and the **Growth Ring** concentric timeline.
+Mycelium Signal Studio is an experimental Next.js 15 application for visualising electrical activity captured from cultivated mushrooms. It turns timestamped `Signal_mV` readings into expressive, biology-inspired narratives – from classic time-series dashboards to immersive visuals such as the **Signal River** particle stream and the **Pulse Tavern** bioluminescent mapping.
 
 ---
 
 ## Highlights
 
 - **Signal River** – HTML5 canvas particle simulation that replays readings sequentially, generates auto-updating narrative cards, and produces a replay overlay when the stream completes.
-- **Growth Ring timeline** – polar visual metaphor that maps activity slices to organic tree rings with hoverable insights.
+- **Pulse Tavern** – an immersive bioluminescent visualization that transforms mushroom electrical signals into a glowing underground landscape of rhythmic pulses and shimmering energy bursts.
 - **Responsive analytics** – enhanced line charts, multi-range selectors, and interpretation panels tuned for quick scanning on desktop or mobile.
 - **BigQuery integration** – seamless ingestion of CSV datasets into `MushroomData.Mushroom_Signal` / `Mushroom_Details` tables via a guided upload flow.
 
@@ -70,17 +70,20 @@ npm run build
 ## Key Features
 
 ### 1. Portfolio Dashboard
+
 - Responsive table + card views
 - Modal CSV uploader mirroring the detailed `MushroomForm` fields
 - Success banner + auto-refresh after upload
 
 ### 2. Mushroom Detail Tabs
+
 - **Overview:** quick summaries, interpretable cards, care hints
 - **Signal River:** live particle stream with auto-generated story blocks and timeline-style history list
 - **Analysis:** statistics-rich charts, gradient metric cards, range selector unified with real-time mode
 - **Network:** Voronoi network visualisation of electrical activity
 
 ### 3. Upload Workflow
+
 - Validates `timestamp, signal` CSV columns
 - Streams data into BigQuery staging + permanent tables
 - Generates a new `MushID` per upload and attaches descriptive metadata
