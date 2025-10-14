@@ -1,21 +1,42 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-type Stage = "RAIN" | "SPROUT" | "BLOOM" | "SPORE" | "WILT" | "REBIRTH";
-const STAGES: Stage[] = ["RAIN", "SPROUT", "BLOOM", "SPORE", "WILT", "REBIRTH"];
+export type MushroomStage =
+  | "RAIN"
+  | "SPROUT"
+  | "BLOOM"
+  | "SPORE"
+  | "WILT"
+  | "REBIRTH";
+
+const STAGES: MushroomStage[] = ["RAIN", "SPROUT", "BLOOM", "SPORE", "WILT", "REBIRTH"];
+
+type MushroomLifeCycleProps = {
+  size?: number;
+  secondsPerStage?: number;
+  stage?: MushroomStage;
+};
 
 export default function MushroomLifeCycle({
-  size = 320,
+  size = 240,
   secondsPerStage = 2.2,
-}: { size?: number; secondsPerStage?: number }) {
+  stage: stageOverride,
+}: MushroomLifeCycleProps) {
   const [idx, setIdx] = useState(0);
-  const stage = STAGES[idx];
+  const currentStage = stageOverride ?? STAGES[idx];
 
   // cycle
   useEffect(() => {
-    const id = setInterval(() => setIdx(i => (i + 1) % STAGES.length), secondsPerStage * 1000);
+    // external stage overrides disable the autoplay loop so the visuals stay in sync with data
+    if (stageOverride != null) {
+      return;
+    }
+    const id = setInterval(
+      () => setIdx((i) => (i + 1) % STAGES.length),
+      secondsPerStage * 1000
+    );
     return () => clearInterval(id);
-  }, [secondsPerStage]);
+  }, [stageOverride, secondsPerStage]);
 
   // animation clock
   const [t, setT] = useState(0);
@@ -36,7 +57,7 @@ export default function MushroomLifeCycle({
 
   // palette & effects per stage
   const style = useMemo(() => {
-    switch(stage){
+    switch(currentStage){
       case "RAIN":   return { cap:"#C94539", outline:"#2B2626", stem:"#EEEAE0", dim:0.35, bg:"#0B0E12" };
       case "SPROUT": return { cap:"#D84C3E", outline:"#2B2626", stem:"#F1EEE6", dim:0.15, bg:"#0B0E12" };
       case "BLOOM":  return { cap:"#E34F41", outline:"#2B2626", stem:"#F4F1E9", dim:0.0,  bg:"#0B0E12" };
@@ -44,40 +65,40 @@ export default function MushroomLifeCycle({
       case "WILT":   return { cap:"#9A685F", outline:"#2B2626", stem:"#D9D6CF", dim:0.45, bg:"#0B0E12" };
       case "REBIRTH":return { cap:"#D94A3D", outline:"#2B2626", stem:"#F0ECE3", dim:0.1,  bg:"#0B0E12" };
     }
-  }, [stage]);
+  }, [currentStage]);
 
   // geometry (viewBox 0..100)
   const vb=100;
 
   // growth amounts
   const sproutH = 8 + 18*k;            // stem grow during SPROUT
-  const bloomPulse = 1 + (stage==="BLOOM" ? 0.02*Math.sin(t/8) : 0);
-  const wiltTilt = stage==="WILT" ? ( -8 * k ) : 0; // droop degrees
-  const yBob = (stage==="BLOOM"||stage==="SPORE") ? Math.sin(t/20)*0.8 : 0;
+  const bloomPulse = 1 + (currentStage==="BLOOM" ? 0.02*Math.sin(t/8) : 0);
+  const wiltTilt = currentStage==="WILT" ? ( -8 * k ) : 0; // droop degrees
+  const yBob = (currentStage==="BLOOM"||currentStage==="SPORE") ? Math.sin(t/20)*0.8 : 0;
 
   // cap size across stages
   let capScale = 0.6;
-  if (stage==="SPROUT") capScale = 0.6 + 0.35*k;
-  if (stage==="BLOOM" || stage==="SPORE") capScale = 0.95*bloomPulse;
-  if (stage==="WILT") capScale = 0.95*(1 - 0.15*k);
-  if (stage==="REBIRTH") capScale = 0.85;
+  if (currentStage==="SPROUT") capScale = 0.6 + 0.35*k;
+  if (currentStage==="BLOOM" || currentStage==="SPORE") capScale = 0.95*bloomPulse;
+  if (currentStage==="WILT") capScale = 0.95*(1 - 0.15*k);
+  if (currentStage==="REBIRTH") capScale = 0.85;
 
   // stem height across stages
   let stemStretch = 0.7;
-  if (stage==="SPROUT") stemStretch = 0.7 + 0.5*k;
-  if (stage==="BLOOM"||stage==="SPORE") stemStretch = 1.2;
-  if (stage==="WILT") stemStretch = 1.0 - 0.2*k;
-  if (stage==="REBIRTH") stemStretch = 0.9;
+  if (currentStage==="SPROUT") stemStretch = 0.7 + 0.5*k;
+  if (currentStage==="BLOOM"||currentStage==="SPORE") stemStretch = 1.2;
+  if (currentStage==="WILT") stemStretch = 1.0 - 0.2*k;
+  if (currentStage==="REBIRTH") stemStretch = 0.9;
 
   // spores (SPORE stage)
   const spores = useMemo(()=>{
     return Array.from({length: 36}).map((_,i)=>{
       const a = (i/36)*Math.PI*2 + (t/60);
-      const R = 8 + (i%6)*3 + (stage==="SPORE"? k*14 : 0);
+      const R = 8 + (i%6)*3 + (currentStage==="SPORE"? k*14 : 0);
       return { x: 50+Math.cos(a)*R, y: 52+Math.sin(a)*R, r: 0.8 + (i%3)*0.3 };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, t, k]);
+  }, [currentStage, t, k]);
 
   // rain lines
   const rain = Array.from({length: 18}).map((_,i)=>{
@@ -87,19 +108,19 @@ export default function MushroomLifeCycle({
   });
 
   // fairy ring (REBIRTH)
-  const ringR = stage==="REBIRTH" ? 10 + k*24 : 0;
+  const ringR = currentStage==="REBIRTH" ? 10 + k*24 : 0;
 
   // soil arc
   const soil = "M5,86 C24,80 76,80 95,86 L95,100 L5,100 Z";
 
   return (
-    <div style={{ display:"grid", gap:8, placeItems:"center" }}>
+    <div style={{ display:"grid", gap:8, placeItems:"center", width:"100%", maxWidth:size }}>
       <svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`} style={{ borderRadius: 16, background: style.bg }}>
         {/* soil */}
         <path d={soil} fill="#1E232A"/>
 
         {/* rain stage */}
-        {stage==="RAIN" && (
+        {currentStage==="RAIN" && (
           <g opacity={0.8}>
             {rain.map((d,i)=>(
               <line key={i} x1={d.x} y1={d.y} x2={d.x} y2={d.y+d.len}
@@ -109,7 +130,7 @@ export default function MushroomLifeCycle({
         )}
 
         {/* REBIRTH fairy ring */}
-        {stage==="REBIRTH" && (
+        {currentStage==="REBIRTH" && (
           <circle cx={50} cy={86} r={ringR} fill="none" stroke="#8CF0A7" strokeOpacity="0.35" strokeWidth="1.5" />
         )}
 
@@ -159,7 +180,7 @@ export default function MushroomLifeCycle({
         </g>
 
         {/* spores on S.P.O.R.E */}
-        {stage==="SPORE" && (
+        {currentStage==="SPORE" && (
           <g opacity={0.95}>
             {spores.map((s,i)=>(
               <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="#fff" />
@@ -171,7 +192,7 @@ export default function MushroomLifeCycle({
         <g>
           <rect x={28} y={6} width={44} height={10} rx={4} fill="rgba(255,255,255,0.22)"/>
           <text x={50} y={13} textAnchor="middle" fontFamily="system-ui, sans-serif" fontSize="5" fontWeight={700} fill="#fff">
-            {stage}
+            {currentStage}
           </text>
         </g>
       </svg>
