@@ -10,6 +10,7 @@ Mycelium Signal Studio is an experimental Next.js 15 application for visualising
 - **Pulse Tavern** – an immersive bioluminescent visualization that transforms mushroom electrical signals into a glowing underground landscape of rhythmic pulses and shimmering energy bursts.
 - **Responsive analytics** – enhanced line charts, multi-range selectors, and interpretation panels tuned for quick scanning on desktop or mobile.
 - **BigQuery integration** – seamless ingestion of CSV datasets into `MushroomData.Mushroom_Signal` / `Mushroom_Details` tables via a guided upload flow.
+- **Voronoi Diagram** - network visualisation of mushroom's mycelium
 
 ---
 
@@ -108,5 +109,9 @@ npm run build
 For questions about the dataset or to request credentials, reach out to the project maintainers. Remember that production service-account keys must remain secret.
 
 ---
+
+## References
+
+AI was used for debugging of code
 
 © Mycelium Signal Studio – visualising fungal intelligence in real time.
