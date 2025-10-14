@@ -62,7 +62,7 @@ const Menu = () => {
         </Button>
         <Button asChild variant="ghost">
           <Link
-            href="/"
+            href="/grow"
             className="text-[#564930] hover:!text-[#C89E4D] hover:bg-transparent text-xl"
           >
             Grow
@@ -140,7 +140,7 @@ const Menu = () => {
             About
           </Link>
           <Link
-            href="/"
+            href="/grow"
             className="py-2 text-[#564930] hover:text-[#C89E4D]"
             onClick={() => setIsOpen(false)}
           >

@@ -74,7 +74,7 @@ function normalizeTrack(raw: unknown): SunoTrack | null {
     "songId",
     "trackId",
     "clipId",
-    "parentId",
+    "parentId"
   );
   if (!idCandidate) return null;
 
@@ -91,7 +91,7 @@ function normalizeTrack(raw: unknown): SunoTrack | null {
     "fullAudioUrl",
     "url",
     "full_audio_url",
-    "mediaUrl",
+    "mediaUrl"
   );
 
   const streamUrlCandidate = pickString(
@@ -100,7 +100,7 @@ function normalizeTrack(raw: unknown): SunoTrack | null {
     "stream_url",
     "streamUrl",
     "audioStreamUrl",
-    "live_url",
+    "live_url"
   );
 
   const title =
@@ -124,7 +124,12 @@ function normalizeTrack(raw: unknown): SunoTrack | null {
     audioUrl: audioUrlCandidate ? String(audioUrlCandidate) : undefined,
     streamAudioUrl: streamUrlCandidate ? String(streamUrlCandidate) : undefined,
     title,
-    tags: typeof tags === "string" ? tags : Array.isArray(tags) ? tags.join(", ") : undefined,
+    tags:
+      typeof tags === "string"
+        ? tags
+        : Array.isArray(tags)
+        ? tags.join(", ")
+        : undefined,
     duration,
   };
 }
@@ -164,7 +169,7 @@ function humanizeRangeLabel(range?: string | null) {
 
 function describeAnalysis(
   analysis: SignalWindowsAnalysis | null,
-  label: string,
+  label: string
 ) {
   if (!analysis) return null;
   const startMs = analysis.windows[0]?.startMs ?? 0;
@@ -224,11 +229,9 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       audioEl.pause();
       audioEl.src = rawSynthUrl;
       audioEl.load();
-      audioEl
-        .play()
-        .catch(() => {
-          /* ignore autoplay rejection */
-        });
+      audioEl.play().catch(() => {
+        /* ignore autoplay rejection */
+      });
     }
     return () => {
       if (audioEl) {
@@ -266,7 +269,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
             typeof row?.timestamp_ms === "number" &&
             Number.isFinite(row.timestamp_ms) &&
             typeof row?.signal === "number" &&
-            Number.isFinite(row.signal),
+            Number.isFinite(row.signal)
         );
         const mapped: SignalDatum[] = rows.map((row, index) => ({
           index,
@@ -291,7 +294,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
   const csvLabel = useMemo(
     () => csvUrl.replace(/^\/+/, "") || "CSV Source",
-    [csvUrl],
+    [csvUrl]
   );
 
   const dbSignalData = useMemo<SignalDatum[]>(
@@ -300,15 +303,15 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         const parsedMs = Number.isFinite(point.ms)
           ? point.ms
           : Number.isFinite(Date.parse(point.timestamp))
-            ? Date.parse(point.timestamp)
-            : index;
+          ? Date.parse(point.timestamp)
+          : index;
         return {
           index,
           ms: parsedMs,
           signal: point.signal,
         };
       }),
-    [fetchedViewData],
+    [fetchedViewData]
   );
 
   const usingDatabase = Boolean(mushId);
@@ -320,7 +323,10 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     : csvLabel;
 
   const analysisSource = signalData;
-  const { samples } = useMemo(() => toSamples(analysisSource), [analysisSource]);
+  const { samples } = useMemo(
+    () => toSamples(analysisSource),
+    [analysisSource]
+  );
 
   const analysis: SignalWindowsAnalysis | null = useMemo(() => {
     if (!samples.length) return null;
@@ -340,18 +346,20 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         signal: s.signal,
         timestampMs: s.timestampMs,
       })),
-      { windowMs, hopMs, desiredWindows, minimumSamplesPerWindow },
+      { windowMs, hopMs, desiredWindows, minimumSamplesPerWindow }
     );
   }, [samples]);
 
   const analysisSummary = useMemo(
     () => describeAnalysis(analysis, sourceLabel),
-    [analysis, sourceLabel],
+    [analysis, sourceLabel]
   );
 
   const displayRange = analysisSummary?.rangeLabel ?? sourceLabel;
   const displaySource =
-    usingDatabase && mushId ? `${displayRange} (Mushroom ${mushId})` : displayRange;
+    usingDatabase && mushId
+      ? `${displayRange} (Mushroom ${mushId})`
+      : displayRange;
 
   const pickTrack = (resp: SunoStatusResponse): SunoTrack | undefined => {
     const candidates: unknown[] = [];
@@ -378,56 +386,55 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     return normalized[0];
   };
 
-  const pollStatus = useCallback(
-    async (taskId: string) => {
-      for (;;) {
-        const res = await fetch(
-          `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
-          { cache: "no-store" },
-        );
-        const json: SunoStatusResponse = await res.json();
-        if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+  const pollStatus = useCallback(async (taskId: string) => {
+    for (;;) {
+      const res = await fetch(
+        `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
+        { cache: "no-store" }
+      );
+      const json: SunoStatusResponse = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Status request failed");
 
-        const picked = pickTrack(json);
-        if (picked) {
-          if (picked.id) lastAudioIdRef.current = picked.id;
-          if (picked.model) lastModelRef.current = picked.model;
+      const picked = pickTrack(json);
+      if (picked) {
+        if (picked.id) lastAudioIdRef.current = picked.id;
+        if (picked.model) lastModelRef.current = picked.model;
 
-          if (picked.streamAudioUrl) {
-            setStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
-          }
-          if (picked.audioUrl) {
-            setFullUrl((prev) => prev ?? picked.audioUrl ?? null);
-          }
+        if (picked.streamAudioUrl) {
+          setStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
         }
+        if (picked.audioUrl) {
+          setFullUrl((prev) => prev ?? picked.audioUrl ?? null);
+        }
+      }
 
-        setStatus(json.status ?? "unknown");
-        if (json.status === "SUCCESS" || json.status === "FAIL") {
-          if (
-            json.status === "SUCCESS" &&
-            (!lastAudioIdRef.current || !lastModelRef.current)
-          ) {
-            try {
-              const resolveRes = await fetch(
-                `/api/suno/resolve-audio?taskId=${encodeURIComponent(taskId)}`,
-                { cache: "no-store" },
-              );
-              if (resolveRes.ok) {
-                const resolved = await resolveRes.json();
-                if (resolved?.id) lastAudioIdRef.current = resolved.id;
-                if (resolved?.model) lastModelRef.current = resolved.model;
-                if (resolved?.streamAudioUrl) {
-                  setStreamUrl((prev) => prev ?? resolved.streamAudioUrl ?? null);
-                }
-                if (resolved?.audioUrl) {
-                  setFullUrl((prev) => prev ?? resolved.audioUrl ?? null);
+      setStatus(json.status ?? "unknown");
+      if (json.status === "SUCCESS" || json.status === "FAIL") {
+        if (
+          json.status === "SUCCESS" &&
+          (!lastAudioIdRef.current || !lastModelRef.current)
+        ) {
+          try {
+            const resolveRes = await fetch(
+              `/api/suno/resolve-audio?taskId=${encodeURIComponent(taskId)}`,
+              { cache: "no-store" }
+            );
+            if (resolveRes.ok) {
+              const resolved = await resolveRes.json();
+              if (resolved?.id) lastAudioIdRef.current = resolved.id;
+              if (resolved?.model) lastModelRef.current = resolved.model;
+              if (resolved?.streamAudioUrl) {
+                setStreamUrl((prev) => prev ?? resolved.streamAudioUrl ?? null);
+              }
+              if (resolved?.audioUrl) {
+                setFullUrl((prev) => prev ?? resolved.audioUrl ?? null);
               }
             } else if (process.env.NODE_ENV !== "production") {
               const errJson = await resolveRes.json().catch(() => null);
               console.warn(
                 "[Suno] resolve-audio fallback failed",
                 resolveRes.status,
-                errJson,
+                errJson
               );
             }
           } catch (resolveErr) {
@@ -437,44 +444,39 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           }
         }
         return json;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-    },
-    [],
-  );
 
-  const pollSynthStatus = useCallback(
-    async (taskId: string) => {
-      for (;;) {
-        const res = await fetch(
-          `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
-          { cache: "no-store" },
-        );
-        const json: SunoStatusResponse = await res.json();
-        if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }, []);
 
-        const picked = pickTrack(json);
-        if (picked) {
-          if (picked.streamAudioUrl) {
-            setSynthStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
-          }
-          if (picked.audioUrl) {
-            setSynthFullUrl((prev) => prev ?? picked.audioUrl ?? null);
-          }
+  const pollSynthStatus = useCallback(async (taskId: string) => {
+    for (;;) {
+      const res = await fetch(
+        `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
+        { cache: "no-store" }
+      );
+      const json: SunoStatusResponse = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+
+      const picked = pickTrack(json);
+      if (picked) {
+        if (picked.streamAudioUrl) {
+          setSynthStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
         }
-
-        setSynthStatus(json.status ?? "unknown");
-        if (json.status === "SUCCESS" || json.status === "FAIL") {
-          return json;
+        if (picked.audioUrl) {
+          setSynthFullUrl((prev) => prev ?? picked.audioUrl ?? null);
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-    },
-    [],
-  );
+
+      setSynthStatus(json.status ?? "unknown");
+      if (json.status === "SUCCESS" || json.status === "FAIL") {
+        return json;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }, []);
 
   const onHear = useCallback(async () => {
     if (busy) return;
@@ -533,7 +535,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       const baseModel = lastModelRef.current;
       if (!baseAudioId || !baseModel) {
         throw new Error(
-          "Missing audioId/model from base generation; cannot extend.",
+          "Missing audioId/model from base generation; cannot extend."
         );
       }
 
@@ -546,9 +548,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         setStatus(`extend ${i + 1}/${segments.length} @${seg.startSec}s`);
 
         if (process.env.NODE_ENV !== "production") {
-          console.group(
-            `[Suno Extend] segment ${i + 1}/${segments.length}`,
-          );
+          console.group(`[Suno Extend] segment ${i + 1}/${segments.length}`);
           console.log(seg);
           console.groupEnd();
         }
@@ -586,7 +586,9 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const onRenderSynth = useCallback(async () => {
     if (synthBusy || synthUploadBusy) return;
     if (!samples.length) {
-      setSynthError("No signal data available yet. Check the source and try again.");
+      setSynthError(
+        "No signal data available yet. Check the source and try again."
+      );
       setSynthStatus("error");
       return;
     }
@@ -607,7 +609,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           timestampMs: sample.timestampMs ?? 0,
           signal: sample.signal,
         })),
-        { durationSec: SYNTH_TARGET_DURATION_SEC },
+        { durationSec: SYNTH_TARGET_DURATION_SEC }
       );
 
       setRawSynthFile(file);
@@ -649,7 +651,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
           : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion. Duration around two minutes.`;
       form.set("prompt", promptText);
-      form.set("style", "synthwave, ambient");
+      form.set("style", "orchestra, strings");
 
       const uploadRes = await fetch("/api/suno/upload-sonification", {
         method: "POST",
@@ -680,7 +682,11 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const signalLoadingState = signalLoading && !analysis;
   const disableButton = busy || signalLoading || !analysis;
   const disableSynthRenderButton =
-    synthBusy || synthUploadBusy || signalLoading || !analysis || !samples.length;
+    synthBusy ||
+    synthUploadBusy ||
+    signalLoading ||
+    !analysis ||
+    !samples.length;
   const disableSynthUploadButton =
     synthUploadBusy || synthBusy || !rawSynthFile;
 
@@ -737,7 +743,9 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           <div>
             <span className="font-medium">Preview status:</span> {synthStatus}
           </div>
-          {synthError && <div className="text-rose-600 text-xs">{synthError}</div>}
+          {synthError && (
+            <div className="text-rose-600 text-xs">{synthError}</div>
+          )}
         </div>
 
         {rawSynthUrl && (
@@ -751,7 +759,9 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
         {streamUrl && (
           <div className="space-y-1">
-            <div className="text-sm text-muted-foreground">Streaming preview:</div>
+            <div className="text-sm text-muted-foreground">
+              Streaming preview:
+            </div>
             <audio controls src={streamUrl}>
               Your browser does not support audio.
             </audio>
@@ -760,7 +770,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
         {fullUrl && (
           <div className="text-sm">
-            <a className="underline" href={fullUrl} target="_blank" rel="noreferrer">
+            <a
+              className="underline"
+              href={fullUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               Open full AI track
             </a>
           </div>
@@ -768,7 +783,9 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
         {synthStreamUrl && (
           <div className="space-y-1">
-            <div className="text-sm text-muted-foreground">Synth streaming preview:</div>
+            <div className="text-sm text-muted-foreground">
+              Synth streaming preview:
+            </div>
             <audio controls src={synthStreamUrl}>
               Your browser does not support audio.
             </audio>
@@ -777,7 +794,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
         {synthFullUrl && (
           <div className="text-sm">
-            <a className="underline" href={synthFullUrl} target="_blank" rel="noreferrer">
+            <a
+              className="underline"
+              href={synthFullUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
               Open enhanced preview
             </a>
           </div>

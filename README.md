@@ -20,6 +20,7 @@ Mycelium Signal Studio is an experimental Next.js 15 application for visualising
 - **Styling:** Tailwind CSS (v4 design tokens) + custom UI components
 - **Data**: Google BigQuery (via `@google-cloud/bigquery`)
 - **Charts:** Recharts, custom HTML5 Canvas renderers
+- **Sound:**
 
 ---
 
