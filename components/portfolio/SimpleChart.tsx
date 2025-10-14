@@ -1,10 +1,14 @@
 // components/ui/SimpleChart.tsx
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Time } from "lightweight-charts";
 
 export type Point = { time: Time; value: number };
+
+const MAX_RENDER_POINTS = 1200;
+const MAX_WINDOW_SAMPLES = 7200;
+const DEFAULT_DOWNSAMPLE_TARGET = 720;
 
 // ---------- helpers ----------
 const hms = (secs: number) => {
@@ -29,7 +33,7 @@ function estimateDeltaSec(points: Point[]): number {
 function amplitudeHalfP2P(points: Point[], windowSec: number): Point[] {
   if (!points.length) return [];
   const dt = Math.max(estimateDeltaSec(points), 1e-9);
-  const W = Math.max(1, Math.round(windowSec / dt));
+  const W = Math.max(1, Math.min(MAX_WINDOW_SAMPLES, Math.round(windowSec / dt)));
   const out: Point[] = [];
   const maxQ: number[] = [], minQ: number[] = [];
 
@@ -60,7 +64,7 @@ function amplitudeHalfP2P(points: Point[], windowSec: number): Point[] {
 function rateOfChangeSlope(points: Point[], windowSec: number): Point[] {
   if (!points.length) return [];
   const dt = Math.max(estimateDeltaSec(points), 1e-9);
-  const W = Math.max(1, Math.round(windowSec / dt));
+  const W = Math.max(1, Math.min(MAX_WINDOW_SAMPLES, Math.round(windowSec / dt)));
 
   const out: Point[] = [];
   const tBuf: number[] = [], yBuf: number[] = [];
@@ -79,6 +83,33 @@ function rateOfChangeSlope(points: Point[], windowSec: number): Point[] {
   return out;
 }
 
+function clampDataDensity(sorted: Point[]): Point[] {
+  const count = sorted.length;
+  if (count <= MAX_RENDER_POINTS) return sorted;
+
+  const target = Math.min(DEFAULT_DOWNSAMPLE_TARGET, MAX_RENDER_POINTS);
+  const bucketSize = Math.ceil(count / target);
+  if (bucketSize <= 1) return sorted;
+
+  const downsampled: Point[] = [];
+  for (let i = 0; i < count; i += bucketSize) {
+    const bucket = sorted.slice(i, i + bucketSize);
+    if (!bucket.length) continue;
+    const mid = bucket[Math.floor(bucket.length / 2)];
+    const avg = bucket.reduce((sum, point) => sum + point.value, 0) / bucket.length;
+    downsampled.push({
+      time: mid.time,
+      value: avg,
+    });
+  }
+
+  if (downsampled.length > MAX_RENDER_POINTS) {
+    return clampDataDensity(downsampled);
+  }
+
+  return downsampled;
+}
+
 // ---------- component ----------
 export default function SimpleChart({ data, height }: { data: Point[]; height?: number }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -87,8 +118,6 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
   const seriesRef = useRef<any>(null);
   const ampSeriesRef = useRef<any>(null);
   const rocSeriesRef = useRef<any>(null);
-  const spikeUpHistRef = useRef<any>(null);
-  const spikeDnHistRef = useRef<any>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   // fixed windows
@@ -97,18 +126,35 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
 
   // toggles
   const [showAmp, setShowAmp] = useState(true);
-  const [showROC, setShowROC] = useState(true);
+  const [showROC, setShowROC] = useState(false);
+
+  const deferredData = useDeferredValue(data);
 
   // sorted + derived
-  const sorted = useMemo(() => (data ?? []).slice().sort((a, b) => Number(a.time) - Number(b.time)), [data]);
-  const ampData = useMemo(() => amplitudeHalfP2P(sorted, AMP_WINDOW_SEC), [sorted]);
-  const rocData = useMemo(() => rateOfChangeSlope(sorted, ROC_WINDOW_SEC), [sorted]);
+  const sorted = useMemo(() => {
+    const incoming = Array.isArray(deferredData) ? deferredData : [];
+    const ordered = incoming.slice().sort((a, b) => Number(a.time) - Number(b.time));
+    return clampDataDensity(ordered);
+  }, [deferredData]);
+
+  const ampData = useMemo(() => {
+    if (!showAmp) return [];
+    return amplitudeHalfP2P(sorted, AMP_WINDOW_SEC);
+  }, [sorted, showAmp]);
+
+  const rocData = useMemo(() => {
+    if (!showROC) return [];
+    return rateOfChangeSlope(sorted, ROC_WINDOW_SEC);
+  }, [sorted, showROC]);
  
   // create chart once
   useEffect(() => {
+    let disposed = false;
     let cleanup = () => {};
+
     (async () => {
       const LWC = await import("lightweight-charts");
+      if (disposed) return;
       const { createChart, ColorType, LineStyle } = LWC;
 
       const el = containerRef.current;
@@ -138,17 +184,10 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
         typeof anyChart.addSeries === "function" && (LWC as any).LineSeries
           ? anyChart.addSeries((LWC as any).LineSeries, opts)
           : anyChart.addLineSeries(opts);
-      const mkHist = (opts: any) =>
-        typeof anyChart.addSeries === "function" && (LWC as any).HistogramSeries
-          ? anyChart.addSeries((LWC as any).HistogramSeries, opts)
-          : anyChart.addHistogramSeries(opts);
 
       seriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false });
       ampSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#10b981" });
       rocSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#f59e0b" });
-
-      spikeUpHistRef.current = mkHist({ priceScaleId: "left", base: 0, color: "#ef4444", priceLineVisible: false });
-      spikeDnHistRef.current = mkHist({ priceScaleId: "left", base: 0, color: "#3b82f6", priceLineVisible: false });
 
       // tooltip
       const tip = document.createElement("div");
@@ -187,41 +226,68 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
       };
       chart.subscribeCrosshairMove(onMove);
 
+      let resizeFrame: number | null = null;
       const ro = new ResizeObserver(() => {
-        const { width, height: h } = el.getBoundingClientRect();
-        chart.applyOptions({ width: Math.max(200, Math.floor(width)), height: Math.max(200, Math.floor(h)) });
+        if (resizeFrame != null) cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => {
+          const { width, height: h } = el.getBoundingClientRect();
+          chart.applyOptions({
+            width: Math.max(200, Math.floor(width)),
+            height: Math.max(200, Math.floor(h)),
+          });
+        });
       });
       ro.observe(el);
 
       cleanup = () => {
         chart.unsubscribeCrosshairMove(onMove);
+        if (resizeFrame != null) cancelAnimationFrame(resizeFrame);
         ro.disconnect();
         tip.remove();
         chart.remove();
         seriesRef.current = ampSeriesRef.current = rocSeriesRef.current = null;
-        spikeUpHistRef.current = spikeDnHistRef.current = null;
         chartRef.current = tooltipRef.current = null;
       };
     })();
-    return () => cleanup();
+    return () => {
+      disposed = true;
+      cleanup();
+    };
   }, []);
 
-  useEffect(() => { if (chartRef.current) chartRef.current.applyOptions({ height }); }, [height]);
+  useEffect(() => {
+    if (chartRef.current && typeof height === "number" && !Number.isNaN(height)) {
+      chartRef.current.applyOptions({ height });
+    }
+  }, [height]);
 
   // base series + visible range on data change
   useEffect(() => {
     if (!seriesRef.current) return;
     seriesRef.current.setData(sorted);
     if (sorted.length) {
-      const from = Number(sorted[0].time), to = Number(sorted[sorted.length - 1].time);
+      const from = Number(sorted[0].time);
+      const to = Number(sorted[sorted.length - 1].time);
+      if (!Number.isFinite(from) || !Number.isFinite(to)) return;
       const ts = chartRef.current?.timeScale?.();
       ts?.setVisibleRange?.({ from, to });
     }
   }, [sorted]);
 
   // overlays update
-  useEffect(() => { if (ampSeriesRef.current) ampSeriesRef.current.setData(showAmp ? ampData : []); }, [showAmp, ampData]);
-  useEffect(() => { if (rocSeriesRef.current) rocSeriesRef.current.setData(showROC ? rocData : []); }, [showROC, rocData]);
+  useEffect(() => {
+    if (ampSeriesRef.current) {
+      ampSeriesRef.current.setData(ampData);
+      ampSeriesRef.current.applyOptions({ visible: showAmp });
+    }
+  }, [ampData, showAmp]);
+
+  useEffect(() => {
+    if (rocSeriesRef.current) {
+      rocSeriesRef.current.setData(rocData);
+      rocSeriesRef.current.applyOptions({ visible: showROC });
+    }
+  }, [rocData, showROC]);
 
   return (
     <div ref={wrapRef} style={{ position: "relative" }}>
@@ -239,10 +305,10 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
           Show amplitude (60s)
         </label>
 
-        {/* Rate toggle (fixed 2s window) */}
+        {/* Rate toggle (fixed 60s window) */}
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, marginLeft: 8 }}>
           <input type="checkbox" checked={showROC} onChange={(e) => setShowROC(e.target.checked)} />
-          Show rate (2s)
+          Show rate (60s)
         </label>
       </div>
 

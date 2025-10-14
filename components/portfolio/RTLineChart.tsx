@@ -96,8 +96,8 @@ export function RTLineChart({ mushId = "" }: { mushId?: string }) {
     // Only run SSE in RT mode
     if (selectedRange !== "rt") {
       seededRef.current = false;
-      setRtSeries([]);
-      setSseConnected(false);
+      setRtSeries((prev) => (prev.length ? [] : prev));
+      setSseConnected((prev) => (prev ? false : prev));
       if (sseRef.current) {
         sseRef.current.close(); // ✅ prevent duplicate streams
         sseRef.current = null;
