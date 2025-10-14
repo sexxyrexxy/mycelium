@@ -17,7 +17,9 @@ import {
   type SignalWindowsAnalysis,
 } from "@/lib/signalClassification";
 
-import MushroomLifeCycle from "@/components/portfolio/MushroomLifeCycle";
+import MushroomLifeCycle, {
+  type MushroomStage,
+} from "@/components/portfolio/MushroomLifeCycle";
 
 const STORY_RANGE_OPTIONS: TimelineRange[] = [
   "rt",
@@ -38,6 +40,7 @@ type StoryCard = {
   end: string;
   avg: number;
   swing: number;
+  stage: MushroomStage;
   progress?: number;
 };
 
@@ -50,8 +53,37 @@ const formatTime = (iso: string) =>
 const formatRangeLabel = (start: string, end: string) =>
   `${formatTime(start)} – ${formatTime(end)}`;
 
+const DEFAULT_STAGE: MushroomStage = "RAIN";
+
+// central mapping between energy/volatility classifications and the life-cycle stage; tweak here to rebalance storytelling
+const determineMushroomStage = (
+  window: SignalWindowsAnalysis["windows"][number]
+): MushroomStage => {
+  if (window.peak || (window.energyLevel === "high" && window.volatility === "spiking")) {
+    return "SPORE";
+  }
+
+  if (window.energyLevel === "high") {
+    return window.volatility === "stable" ? "BLOOM" : "SPORE";
+  }
+
+  if (window.energyLevel === "medium") {
+    if (window.volatility === "stable") return "SPROUT";
+    if (window.volatility === "fluctuating") return "BLOOM";
+    return "SPORE";
+  }
+
+  if (window.volatility === "spiking") return "WILT";
+  if (window.volatility === "fluctuating") return "RAIN";
+  return "REBIRTH";
+};
+
+const formatStage = (stage: MushroomStage) =>
+  stage.charAt(0) + stage.slice(1).toLowerCase();
+
 const describeWindowSummary = (window: SignalWindowsAnalysis["windows"][number], inProgress: boolean) => {
   const windowLabel = formatRangeLabel(window.startISO, window.endISO);
+  const stageLabel = formatStage(determineMushroomStage(window));
   const energyLabel =
     window.energyLevel === "low"
       ? "Low energy"
@@ -63,9 +95,9 @@ const describeWindowSummary = (window: SignalWindowsAnalysis["windows"][number],
       ? "Stable movement"
       : window.volatility === "fluctuating"
         ? "Fluctuating movement"
-        : "Spiking movement";
+      : "Spiking movement";
   const baseSummary =
-    `${energyLabel} during ${windowLabel}; average absolute signal ${window.localAvg.toFixed(3)} mV. ` +
+    `Stage ${stageLabel}. ${energyLabel} during ${windowLabel}; average absolute signal ${window.localAvg.toFixed(3)} mV. ` +
     `${volatilityLabel}, normalised variance ${window.normalizedVariance.toFixed(2)}.`;
   const audioSummary =
     `Audio guidance: ${window.audio.layers} layer(s), ` +
@@ -79,17 +111,21 @@ const windowToStory = (
   window: SignalWindowsAnalysis["windows"][number],
   inProgress: boolean,
   progress: number
-): StoryCard => ({
-  id: window.index + 1,
-  title: window.combinedLabel,
-  summary: describeWindowSummary(window, inProgress),
-  mood: `Energy ${window.energyLevel}; movement ${window.volatility}`,
-  start: window.startISO,
-  end: window.endISO,
-  avg: window.localAvg,
-  swing: window.normalizedVariance,
-  progress: inProgress ? progress : undefined,
-});
+): StoryCard => {
+  const stage = determineMushroomStage(window);
+  return {
+    id: window.index + 1,
+    title: window.combinedLabel,
+    summary: describeWindowSummary(window, inProgress),
+    mood: `${stage} • Energy ${window.energyLevel}; movement ${window.volatility}`,
+    start: window.startISO,
+    end: window.endISO,
+    avg: window.localAvg,
+    swing: window.normalizedVariance,
+    stage,
+    progress: inProgress ? progress : undefined,
+  };
+};
 
 export default function SignalRiverTab() {
   const { id } = useParams<{ id: string }>();
@@ -215,6 +251,10 @@ useEffect(() => {
     setReplayToken((token) => token + 1);
   }, [resetStories]);
 
+  // prefer the active stream window; otherwise surface the latest completed stage from history
+  const activeStage: MushroomStage =
+    currentStory?.stage ?? history[0]?.stage ?? DEFAULT_STAGE;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -310,7 +350,7 @@ useEffect(() => {
           )}
           {/* Mushroom Phase*/}
           <div className="">
-            <MushroomLifeCycle />
+            <MushroomLifeCycle stage={activeStage} />
           </div>
         </aside>
       </div>

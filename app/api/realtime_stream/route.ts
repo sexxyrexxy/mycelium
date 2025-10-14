@@ -151,13 +151,13 @@ const SUBSCRIPTION_ID = "bigquery-signal-sub"; // <- your Pub/Sub subscription n
 export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
 
-  const stream = new ReadableStream({
+  const stream = new ReadableStream({  //Push bytes to client over time
     async start(controller) {
       function sendEvent(data: unknown) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       }
 
-      // Heartbeat (keeps connection alive)
+      // Heartbeat (keeps connection alive) keep pipe open
       const keepalive = setInterval(() => {
         controller.enqueue(encoder.encode(`event: ping\ndata: "💓"\n\n`));
       }, 15000);
@@ -204,10 +204,10 @@ export async function GET(req: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
+      "Content-Type": "text/event-stream", //parse frames as events
+      "Cache-Control": "no-cache, no-transform", //prevent buffering and early close
       Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
+      "X-Accel-Buffering": "no", //disables nginx buffering
     },
   });
 }

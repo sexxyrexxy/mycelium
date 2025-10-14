@@ -7,6 +7,7 @@ import {
 } from "@/components/portfolio/PixelMushrooms";
 import { useParams } from "next/navigation";
 import React, { useMemo, useState, useRef, useEffect } from "react";
+import { RTLineChart } from "@/components/portfolio/RTLineChart";
 
 export default function Overview() {
   const { id } = useParams<{ id: string }>();
@@ -115,7 +116,7 @@ export default function Overview() {
       <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
         {/* Left side (65%) */}
         <div>
-          <ChartLineInteractive mushId={id} />
+          <RTLineChart mushId={id} /> {/* displays HISTORICAL and REALTIME data - Kai */}
 
           {/* NEW: Care panel directly below the chart */}
           <Card className="mt-4">
