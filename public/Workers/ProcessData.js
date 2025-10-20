@@ -56,7 +56,7 @@ self.onmessage = (event) => {
 
     // --- Spike Detection ---
     const zThreshold = 2;
-    const spikeWindow = 50;
+    const spikeWindow = 30;
     const spikes = [];
 
     for (let i = 0; i < signals.length; i++) {

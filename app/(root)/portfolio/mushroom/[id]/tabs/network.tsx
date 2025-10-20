@@ -52,6 +52,9 @@ const MushroomNetwork: React.FC = () =>  {
         return;
       }
 
+      // Example: 1000 elements, ~20% chance of spike
+const testSpikes: number[] = Array.from({ length: 1000 }, () => (Math.random() < 0.2 ? 1 : 0));
+
       cleanup = drawVoronoiChart(
         svgRef.current!,
         800,
@@ -141,7 +144,7 @@ const MushroomNetwork: React.FC = () =>  {
 
         <Card>
           <CardHeader>
-            <CardTitle>Ripple Colors</CardTitle>
+            <CardTitle>Ripple Colors = Spike Detection</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-gray-700 space-y-2">
             <div className="flex flex-col gap-2">
