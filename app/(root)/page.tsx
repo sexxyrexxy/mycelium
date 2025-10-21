@@ -6,6 +6,8 @@ import { LogoutButton } from "@/components/auth/logoutButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpRight, Leaf, Sprout, Users } from "lucide-react";
+import { Kavoon } from "next/font/google";
+const kavoon = Kavoon({ subsets: ["latin"], weight: "400" });
 
 type Mushroom = {
   MushID: string;
@@ -96,25 +98,25 @@ export default function Dashboard() {
       label: "Mushrooms tracked",
       value: stats.total,
       icon: Sprout,
-      accent: "from-emerald-500/25 to-emerald-500/0",
+      accent: "from-[#564930]/35 to-[#564930]/0",
     },
     {
       label: "Species diversity",
       value: stats.species,
       icon: Leaf,
-      accent: "from-lime-400/25 to-lime-400/0",
+      accent: "from-[#C89E4D]/35 to-[#C89E4D]/0",
     },
     {
       label: "Active caretakers",
       value: stats.caretakers,
       icon: Users,
-      accent: "from-amber-400/25 to-amber-400/0",
+      accent: "from-[#AAA432]/30 to-[#AAA432]/0",
     },
     {
       label: "Leading variety",
       value: topKind ? `${topKind.kind} (${topKind.count})` : "-",
       icon: ArrowUpRight,
-      accent: "from-sky-400/25 to-sky-400/0",
+      accent: "from-[#AA3232]/20 to-[#AA3232]/0",
     },
   ];
 
@@ -126,13 +128,15 @@ export default function Dashboard() {
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-6 rounded-3xl bg-white/70 p-6 shadow-lg ring-1 ring-black/5 backdrop-blur-md md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
-            <p className="text-sm uppercase tracking-wide text-emerald-700/80">
+            <p className="text-sm uppercase tracking-wide text-[#AAA432]">
               Mycelium Intelligence Hub
             </p>
-            <h1 className="text-3xl font-semibold text-stone-900 sm:text-4xl">
+            <h1
+              className={`font-bold text-4xl md:text-4xl text-[#564930] ${kavoon.className}`}
+            >
               Welcome back - your colony is thriving.
             </h1>
-            <p className="max-w-2xl text-sm text-stone-600 sm:text-base">
+            <p className="max-w-2xl text-sm text-[#564930] sm:text-base">
               Track vitality across every cultivated mushroom. Summaries update
               automatically as new signals stream in from the field.
             </p>
@@ -140,7 +144,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 self-start md:self-auto">
             <Link
               href="/portfolio"
-              className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-600/30 transition hover:bg-emerald-700"
+              className="inline-flex items-center gap-2 rounded-full bg-[#AAA432] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-[#AAA432]/30 transition hover:bg-[#6e6b2c]"
             >
               Go to portfolio
               <ArrowUpRight className="h-4 w-4" />
@@ -159,16 +163,16 @@ export default function Dashboard() {
                 className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${accent}`}
               />
               <CardHeader className="relative z-10 flex flex-row items-center justify-between space-y-0 pb-4">
-                <CardTitle className="text-sm font-medium text-stone-600">
+                <CardTitle className="text-sm font-medium text-[#564930]">
                   {label}
                 </CardTitle>
-                <Icon className="h-5 w-5 text-emerald-600" />
+                <Icon className="h-5 w-5 text-[#564930]" />
               </CardHeader>
               <CardContent className="relative z-10">
                 {loading ? (
                   <Skeleton className="h-8 w-24 rounded-full" />
                 ) : (
-                  <p className="text-2xl font-semibold text-stone-900">
+                  <p className="text-2xl font-semibold text-[#564930]">
                     {renderStatValue(value)}
                   </p>
                 )}
@@ -190,7 +194,7 @@ export default function Dashboard() {
             </div>
             <Link
               href="/upload"
-              className="inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100"
+              className="inline-flex items-center gap-2 rounded-full border border-[#AAA432] bg-[#fffeeb] px-4 py-2 text-sm font-medium text-[#AAA432] transition hover:bg-[#e5e2ab]"
             >
               Upload new signals
               <ArrowUpRight className="h-4 w-4" />
@@ -224,14 +228,14 @@ export default function Dashboard() {
               : displayedMushrooms.map((mush) => (
                   <Card
                     key={mush.MushID}
-                    className="group relative overflow-hidden border-none bg-gradient-to-br from-white/90 via-white/80 to-emerald-50/60 shadow-lg ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl"
+                    className="group relative overflow-hidden border-none bg-gradient-to-br from-white/90 via-white/80 to-[#e5e2ab]/60 shadow-lg ring-1 ring-black/5 transition hover:-translate-y-1 hover:shadow-xl"
                   >
-                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(52,181,121,0.18),transparent_55%)]" />
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(229,226,171,0.18),transparent_55%)]" />
                     <CardHeader className="relative z-10">
                       <CardTitle className="text-lg font-semibold text-stone-900">
                         {mush.Name || "Unnamed specimen"}
                       </CardTitle>
-                      <p className="text-sm font-medium text-emerald-700/80">
+                      <p className="text-sm font-medium text-[#6c681d]/80">
                         {mush.Mushroom_Kind || "Unclassified species"}
                       </p>
                     </CardHeader>
@@ -242,16 +246,16 @@ export default function Dashboard() {
                       </p>
                       <div className="flex items-center justify-between rounded-xl border border-white/60 bg-white/70 px-4 py-2 text-xs font-medium text-stone-600 shadow-inner">
                         <div className="flex items-center gap-2">
-                          <Leaf className="h-4 w-4 text-emerald-600" />
+                          <Leaf className="h-4 w-4 text-[#AAA432]" />
                           {formatCaretaker(mush.UserID)}
                         </div>
-                        <span className="text-[11px] uppercase tracking-wide text-emerald-700/80">
+                        <span className="text-[11px] uppercase tracking-wide text-[#6c681d]/80">
                           MushID: {mush.MushID.slice(0, 6)}
                         </span>
                       </div>
                       <Link
                         href={`/portfolio/mushroom/${mush.MushID}`}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-600/30 transition group-hover:bg-emerald-700"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#AAA432] px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-[#AAA432]/30 transition group-hover:bg-[#6c681d]"
                       >
                         View live signals
                         <ArrowUpRight className="h-4 w-4" />
@@ -265,7 +269,7 @@ export default function Dashboard() {
             <div className="mt-4 flex justify-center">
               <Link
                 href="/portfolio"
-                className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-2 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-50"
+                className="inline-flex items-center gap-2 rounded-full border border-[#AAA432] bg-white px-5 py-2 text-sm font-semibold text-[#AAA432] shadow-sm transition hover:bg-[#e5e2ab]"
               >
                 See all mushrooms
                 <ArrowUpRight className="h-4 w-4" />
@@ -305,7 +309,7 @@ export default function Dashboard() {
                 ))}
               </CardContent>
             </Card>
-            <Card className="border-none bg-gradient-to-br from-emerald-500/90 to-emerald-600 shadow-xl ring-1 ring-black/5">
+            <Card className="border-none bg-gradient-to-br from-[#AAA432]/70 to-[#6c681d]/80 shadow-xl ring-1 ring-black/5">
               <CardHeader>
                 <CardTitle className="text-lg font-semibold text-white">
                   How to grow the colony

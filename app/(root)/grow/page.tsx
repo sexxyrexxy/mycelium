@@ -62,13 +62,13 @@ export default function Homepage() {
         "King Oyster mushrooms with thick stems and savory umami flavor, prized for grilling and gourmet cooking.",
     },
     {
-      name: "Lion's Pride",
+      name: "Lion Mane",
       species: "Hericium erinaceus",
       description:
         "Lion’s Mane mushrooms with cascading spines, valued for seafood-like texture and medicinal properties.",
     },
     {
-      name: "Rosé Cluster",
+      name: "Rose Cluster",
       species: "Pleurotus djamor",
       description:
         "Vibrant pink oyster mushrooms that grow in dense clusters, fast to cultivate but with a short shelf life.",

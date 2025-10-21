@@ -612,7 +612,7 @@ const growData: Record<string, MushroomData> = {
     },
   },
 
-  lionspride: {
+  lionmane: {
     common: "Lion's Pride",
     species: "Hericium erinaceus",
     intro:
@@ -735,7 +735,7 @@ const growData: Record<string, MushroomData> = {
     },
   },
 
-  foresttail: {
+  turkeytail: {
     common: "Turkey Tail",
     species: "Trametes versicolor",
     intro:
