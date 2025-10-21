@@ -34,6 +34,7 @@ type IndividualCredentialKey = keyof typeof INDIVIDUAL_CREDENTIAL_ENV_KEYS;
 const rawJsonEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 const rawBase64Env = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_BASE64;
 const credentials = resolveCredentials();
+export const googleCredentials = credentials;
 
 const projectId = process.env.GCP_PROJECT_ID ?? "mycelium-470904";
 const location = process.env.GCP_LOCATION ?? "australia-southeast1";

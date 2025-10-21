@@ -1,18 +1,15 @@
 // lib/sonificationStorage.ts
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
-import { BigQuery } from "@google-cloud/bigquery";
 import { Storage } from "@google-cloud/storage";
+import { getBigQueryClient, googleConfig, googleCredentials } from "./googleCloud";
 
 const PROJECT_ID =
   process.env.GCP_PROJECT_ID ||
   process.env.BQ_PROJECT_ID ||
-  "mycelium-470904";
-const DATASET_ID = process.env.BQ_DATASET_ID || "MushroomData";
-const DETAILS_TABLE = process.env.BQ_DETAILS_TABLE || "Mushroom_Details";
-const LOCATION = process.env.BQ_LOCATION || "australia-southeast1";
-const KEY_FILE = process.env.GCP_KEY_FILE || "mycelium-470904-5621723dfeff.json";
+  googleConfig.projectId;
+const DATASET_ID = process.env.BQ_DATASET_ID || googleConfig.datasetId;
+const DETAILS_TABLE = process.env.BQ_DETAILS_TABLE || googleConfig.detailsTable;
+const LOCATION = process.env.BQ_LOCATION || googleConfig.location;
 const BUCKET_NAME =
   process.env.GCS_SONIFICATION_BUCKET ||
   process.env.GCS_SOUNDS_BUCKET ||
@@ -32,34 +29,24 @@ export type SonificationState = {
   suno?: SonificationStoredValue | null;
 };
 
-let cachedCredentials:
-  | { client_email: string; private_key: string }
-  | null = null;
+const credentials =
+  googleCredentials?.client_email && googleCredentials?.private_key
+    ? {
+        client_email: googleCredentials.client_email,
+        private_key: googleCredentials.private_key,
+      }
+    : undefined;
 
-function loadCredentials() {
-  if (cachedCredentials) return cachedCredentials;
-  const keyPath = path.join(process.cwd(), KEY_FILE);
-  const content = fs.readFileSync(keyPath, "utf8");
-  const json = JSON.parse(content);
-  const credentials = {
-    client_email: json.client_email,
-    private_key: json.private_key,
-  };
-  cachedCredentials = credentials;
-  return credentials;
-}
+const bigQuery = getBigQueryClient();
 
-const credentials = loadCredentials();
-
-const bigQuery = new BigQuery({
-  projectId: PROJECT_ID,
-  credentials,
-});
-
-const storage = new Storage({
-  projectId: PROJECT_ID,
-  credentials,
-});
+const storage = new Storage(
+  credentials
+    ? {
+        projectId: PROJECT_ID,
+        credentials,
+      }
+    : { projectId: PROJECT_ID },
+);
 
 const bucket = storage.bucket(BUCKET_NAME);
 
