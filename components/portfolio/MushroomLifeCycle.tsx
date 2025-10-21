@@ -50,6 +50,12 @@ export default function MushroomLifeCycle({
   }, []);
 
   // easing helpers
+  const clamp01 = (value: number) => {
+    if (!Number.isFinite(value) || Number.isNaN(value)) return 0;
+    if (value <= 0) return 0;
+    if (value >= 1) return 1;
+    return value;
+  };
   const ease = (x:number)=> x<0?0:x>1?1:x*x*(3-2*x);
 
   // normalized progress 0..1 within current stage (for subtle transitions)
