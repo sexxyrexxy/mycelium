@@ -214,6 +214,11 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const lastAudioIdRef = useRef<string | null>(null);
   const lastModelRef = useRef<string | null>(null);
   const rawSynthAudioRef = useRef<HTMLAudioElement | null>(null);
+  const rawSynthObjectUrlRef = useRef<string | null>(null);
+  const shouldAutoplayRawRef = useRef(false);
+  const storeRawInFlightRef = useRef(false);
+  const storedSunoSourceRef = useRef<string | null>(null);
+  const storeSunoInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!mushId) return;
@@ -223,25 +228,211 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   }, [mushId, selectedRange, setSelectedRange]);
 
   useEffect(() => {
-    if (!rawSynthUrl) return;
     const audioEl = rawSynthAudioRef.current;
-    if (audioEl) {
+    if (!audioEl) return;
+
+    if (!rawSynthUrl) {
       audioEl.pause();
-      audioEl.src = rawSynthUrl;
+      audioEl.removeAttribute("src");
       audioEl.load();
+      return;
+    }
+
+    audioEl.pause();
+    audioEl.src = rawSynthUrl;
+    audioEl.load();
+    if (shouldAutoplayRawRef.current) {
       audioEl.play().catch(() => {
         /* ignore autoplay rejection */
       });
+      shouldAutoplayRawRef.current = false;
     }
-    return () => {
-      if (audioEl) {
-        audioEl.pause();
-        audioEl.removeAttribute("src");
-        audioEl.load();
-      }
-      URL.revokeObjectURL(rawSynthUrl);
-    };
   }, [rawSynthUrl]);
+
+  useEffect(() => {
+    return () => {
+      const objectUrl = rawSynthObjectUrlRef.current;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        rawSynthObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const persistRawAudio = useCallback(
+    async (file: File) => {
+      if (!mushId || storeRawInFlightRef.current) {
+        return;
+      }
+
+      try {
+        storeRawInFlightRef.current = true;
+        const form = new FormData();
+        form.set("file", file);
+
+        const res = await fetch(
+          `/api/mushroom/${encodeURIComponent(mushId)}/sonification/raw`,
+          {
+            method: "POST",
+            body: form,
+          },
+        );
+        const payload = await res.json();
+        if (!res.ok) {
+          throw new Error(payload?.error ?? "Failed to store raw audio");
+        }
+
+        const signedUrl: string | null =
+          payload?.rawSound?.signedUrl ?? null;
+        if (signedUrl) {
+          if (rawSynthObjectUrlRef.current) {
+            URL.revokeObjectURL(rawSynthObjectUrlRef.current);
+            rawSynthObjectUrlRef.current = null;
+          }
+          shouldAutoplayRawRef.current = false;
+          setRawSynthUrl(signedUrl);
+          setSynthStatus((prev) =>
+            prev === "rendered" || prev === "stored" ? "stored" : prev,
+          );
+        }
+      } catch (err) {
+        console.error("[Sonification] raw persist error", err);
+      } finally {
+        storeRawInFlightRef.current = false;
+      }
+    },
+    [mushId],
+  );
+
+  const persistSunoAudio = useCallback(
+    async (audioUrl: string) => {
+      if (!mushId || !audioUrl) {
+        return;
+      }
+      if (!/^https?:\/\//i.test(audioUrl)) {
+        return;
+      }
+      if (storedSunoSourceRef.current === audioUrl) {
+        return;
+      }
+      if (storeSunoInFlightRef.current) {
+        return;
+      }
+
+      try {
+        storeSunoInFlightRef.current = true;
+        storedSunoSourceRef.current = audioUrl;
+        const res = await fetch(
+          `/api/mushroom/${encodeURIComponent(mushId)}/sonification/suno`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceUrl: audioUrl,
+              filename: `suno-${mushId}.mp3`,
+            }),
+          },
+        );
+        const payload = await res.json();
+        if (!res.ok) {
+          throw new Error(payload?.error ?? "Failed to store enhanced audio");
+        }
+
+        const signedUrl: string | null =
+          payload?.sunoSound?.signedUrl ?? null;
+        if (signedUrl) {
+          setSynthFullUrl(signedUrl);
+          setSynthStreamUrl(signedUrl);
+        }
+      } catch (err) {
+        console.error("[Sonification] suno persist error", err);
+        storedSunoSourceRef.current = null;
+      } finally {
+        storeSunoInFlightRef.current = false;
+      }
+    },
+    [mushId],
+  );
+
+  useEffect(() => {
+    setRawSynthFile(null);
+    if (rawSynthObjectUrlRef.current) {
+      URL.revokeObjectURL(rawSynthObjectUrlRef.current);
+      rawSynthObjectUrlRef.current = null;
+    }
+    setRawSynthUrl(null);
+    setSynthStreamUrl(null);
+    setSynthFullUrl(null);
+    storedSunoSourceRef.current = null;
+    storeRawInFlightRef.current = false;
+    storeSunoInFlightRef.current = false;
+    shouldAutoplayRawRef.current = false;
+    setSynthStatus("idle");
+    setStatus("idle");
+
+    if (!mushId) {
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+
+    const loadStored = async () => {
+      try {
+        const res = await fetch(
+          `/api/mushroom/${encodeURIComponent(mushId)}/sonification`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+
+        if (res.status === 404) {
+          return;
+        }
+
+        const payload = await res.json();
+        if (!res.ok) {
+          throw new Error(payload?.error ?? "Failed to load sonification");
+        }
+        if (cancelled) return;
+
+        const rawUrl: string | null = payload?.rawSound?.signedUrl ?? null;
+        const sunoUrl: string | null = payload?.sunoSound?.signedUrl ?? null;
+
+        if (rawUrl) {
+          shouldAutoplayRawRef.current = false;
+          setRawSynthUrl(rawUrl);
+          setSynthStatus((prev) =>
+            prev === "idle" || prev === "stored" ? "stored" : prev,
+          );
+        }
+
+        if (sunoUrl) {
+          setSynthFullUrl(sunoUrl);
+          setSynthStreamUrl(sunoUrl);
+          setStatus((prev) =>
+            prev === "idle" || prev === "stored" ? "stored" : prev,
+          );
+          if (!rawUrl) {
+            setSynthStatus((prev) =>
+              prev === "idle" || prev === "stored" ? "stored" : prev,
+            );
+          }
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[Sonification] load stored", err);
+      }
+    };
+
+    loadStored();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [mushId, setStatus]);
 
   useEffect(() => {
     if (mushId) return;
@@ -450,33 +641,39 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     }
   }, []);
 
-  const pollSynthStatus = useCallback(async (taskId: string) => {
-    for (;;) {
-      const res = await fetch(
-        `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
-        { cache: "no-store" }
-      );
-      const json: SunoStatusResponse = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Status request failed");
+  const pollSynthStatus = useCallback(
+    async (taskId: string) => {
+      for (;;) {
+        const res = await fetch(
+          `/api/suno/status?taskId=${encodeURIComponent(taskId)}`,
+          { cache: "no-store" },
+        );
+        const json: SunoStatusResponse = await res.json();
+        if (!res.ok) throw new Error(json?.error ?? "Status request failed");
 
-      const picked = pickTrack(json);
-      if (picked) {
-        if (picked.streamAudioUrl) {
-          setSynthStreamUrl((prev) => prev ?? picked.streamAudioUrl ?? null);
+        const picked = pickTrack(json);
+        if (picked) {
+          if (picked.streamAudioUrl) {
+            setSynthStreamUrl(
+              (prev) => prev ?? picked.streamAudioUrl ?? null,
+            );
+          }
+          if (picked.audioUrl) {
+            setSynthFullUrl((prev) => prev ?? picked.audioUrl ?? null);
+            void persistSunoAudio(picked.audioUrl);
+          }
         }
-        if (picked.audioUrl) {
-          setSynthFullUrl((prev) => prev ?? picked.audioUrl ?? null);
+
+        setSynthStatus(json.status ?? "unknown");
+        if (json.status === "SUCCESS" || json.status === "FAIL") {
+          return json;
         }
-      }
 
-      setSynthStatus(json.status ?? "unknown");
-      if (json.status === "SUCCESS" || json.status === "FAIL") {
-        return json;
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-    }
-  }, []);
+    },
+    [persistSunoAudio],
+  );
 
   const onHear = useCallback(async () => {
     if (busy) return;
@@ -599,7 +796,12 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     setSynthStreamUrl(null);
     setSynthFullUrl(null);
     setRawSynthFile(null);
+    if (rawSynthObjectUrlRef.current) {
+      URL.revokeObjectURL(rawSynthObjectUrlRef.current);
+      rawSynthObjectUrlRef.current = null;
+    }
     setRawSynthUrl(null);
+    storedSunoSourceRef.current = null;
 
     try {
       const { renderSynthMp3 } = await import("./sonification/renderSynth");
@@ -614,15 +816,20 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
       setRawSynthFile(file);
       const url = URL.createObjectURL(file);
+      rawSynthObjectUrlRef.current = url;
+      shouldAutoplayRawRef.current = true;
       setRawSynthUrl(url);
       setSynthStatus("rendered");
+      if (mushId) {
+        void persistRawAudio(file);
+      }
     } catch (err) {
       setSynthError(err instanceof Error ? err.message : String(err));
       setSynthStatus("error");
     } finally {
       setSynthBusy(false);
     }
-  }, [synthBusy, synthUploadBusy, samples]);
+  }, [synthBusy, synthUploadBusy, samples, mushId, persistRawAudio]);
 
   const onUploadSynth = useCallback(async () => {
     if (synthUploadBusy || synthBusy) return;
@@ -651,7 +858,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
           : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion. Duration around two minutes.`;
       form.set("prompt", promptText);
-      form.set("style", "orchestra, strings");
+      form.set("style", "sythetic soundscape, ambient, experimental");
 
       const uploadRes = await fetch("/api/suno/upload-sonification", {
         method: "POST",
