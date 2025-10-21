@@ -10,7 +10,6 @@
 // const DATASET_ID = "MushroomData";
 // const SIGNALS_TABLE = "TEST_Signal";
 // const LOCATION = "australia-southeast1";
-// const KEY_FILE = "mycelium-470904-5621723dfeff.json";
 
 // // How often to poll BigQuery (ms)
 // const DEFAULT_POLL_MS = 2000;
@@ -30,7 +29,7 @@
 //   );
 
 //   const encoder = new TextEncoder();
-//   const bq = new BigQuery({ projectId: PROJECT_ID, keyFilename: KEY_FILE, location: LOCATION });
+//   const bq = new BigQuery({ projectId: PROJECT_ID, location: LOCATION });
 
 //   // Track the latest timestamp we've emitted (as string)
 //   let lastTs: string | null = startAfter || null;
@@ -147,7 +146,8 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
 
-  const stream = new ReadableStream({  //Push bytes to client over time
+  const stream = new ReadableStream({
+    //Push bytes to client over time
     async start(controller) {
       function sendEvent(data: unknown) {
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
@@ -186,10 +186,11 @@ export async function GET(req: NextRequest) {
         clearInterval(keepalive);
         subscription.removeListener("message", messageHandler);
         subscription.close().catch(() => {});
-        try { controller.close(); } catch {}
+        try {
+          controller.close();
+        } catch {}
       };
 
-      // @ts-expect-error Request.signal is optional in the Next.js runtime
       req.signal?.addEventListener?.("abort", abort);
     },
   });
