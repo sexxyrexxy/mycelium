@@ -11,7 +11,6 @@
 // const DATASET_ID = "MushroomData1";
 // const TABLE_ID   = "MushroomSignals";
 // const LOCATION   = "US";
-// const KEY_FILE   = "mycelium-470904-5621723dfeff.json";
 
 // export async function POST(req: NextRequest) {
 //   try {
@@ -24,7 +23,6 @@
 
 //     const bq = new BigQuery({
 //       projectId: PROJECT_ID,
-//       keyFilename: KEY_FILE,
 //       location: LOCATION,
 //     });
 

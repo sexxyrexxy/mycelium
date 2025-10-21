@@ -1,15 +1,28 @@
 // lib/sonificationStorage.ts
 import crypto from "crypto";
 import { Storage } from "@google-cloud/storage";
-import { getBigQueryClient, googleConfig, googleCredentials } from "./googleCloud";
+import {
+  getBigQueryClient,
+  googleConfig,
+  googleCredentials,
+} from "./googleCloud";
+
 
 const PROJECT_ID =
   process.env.GCP_PROJECT_ID ||
   process.env.BQ_PROJECT_ID ||
-  googleConfig.projectId;
-const DATASET_ID = process.env.BQ_DATASET_ID || googleConfig.datasetId;
-const DETAILS_TABLE = process.env.BQ_DETAILS_TABLE || googleConfig.detailsTable;
-const LOCATION = process.env.BQ_LOCATION || googleConfig.location;
+
+  googleConfig.projectId ||
+  "mycelium-470904";
+const DATASET_ID =
+  process.env.BQ_DATASET_ID || googleConfig.datasetId || "MushroomData";
+const DETAILS_TABLE =
+  process.env.BQ_DETAILS_TABLE ||
+  googleConfig.detailsTable ||
+  "Mushroom_Details";
+const LOCATION =
+  process.env.BQ_LOCATION || googleConfig.location || "australia-southeast1";
+
 const BUCKET_NAME =
   process.env.GCS_SONIFICATION_BUCKET ||
   process.env.GCS_SOUNDS_BUCKET ||
@@ -79,7 +92,7 @@ function normaliseObjectPath(value: unknown): string | null {
 
 function guessExtension(
   originalName: string | undefined,
-  contentType: string | undefined,
+  contentType: string | undefined
 ): string {
   const lowerName = originalName?.toLowerCase() ?? "";
   const extFromName =
@@ -106,7 +119,7 @@ function buildObjectName(
   mushId: string,
   kind: SonificationKind,
   originalName?: string,
-  contentType?: string,
+  contentType?: string
 ): string {
   const safeId = mushId.replace(/[^a-zA-Z0-9_-]/g, "-");
   const ext = guessExtension(originalName, contentType);
@@ -127,7 +140,7 @@ async function signedUrlForObject(objectName: string): Promise<string | null> {
 }
 
 async function fetchCurrentPaths(
-  mushId: string,
+  mushId: string
 ): Promise<{ raw?: string | null; suno?: string | null } | null> {
   const [rows] = await bigQuery.query({
     query: `
@@ -163,7 +176,7 @@ async function deleteIfExists(objectName: string | null): Promise<void> {
 async function writeBufferToGcs(
   objectName: string,
   buffer: Buffer,
-  contentType?: string,
+  contentType?: string
 ): Promise<void> {
   await bucket.file(objectName).save(buffer, {
     resumable: false,
@@ -175,7 +188,7 @@ async function writeBufferToGcs(
 async function updateBigQueryColumn(
   mushId: string,
   column: "raw_sound" | "suno_sound",
-  objectName: string,
+  objectName: string
 ): Promise<void> {
   await bigQuery.query({
     query: `
@@ -189,7 +202,7 @@ async function updateBigQueryColumn(
 }
 
 export async function getSonificationState(
-  mushId: string,
+  mushId: string
 ): Promise<SonificationState | null> {
   const current = await fetchCurrentPaths(mushId);
   if (!current) return null;
@@ -217,7 +230,7 @@ export async function saveSonificationBuffer(
   mushId: string,
   kind: SonificationKind,
   buffer: Buffer,
-  options: { originalName?: string; contentType?: string } = {},
+  options: { originalName?: string; contentType?: string } = {}
 ): Promise<SonificationStoredValue> {
   if (!buffer.length) {
     throw new Error("Cannot store an empty audio buffer.");
@@ -236,7 +249,7 @@ export async function saveSonificationBuffer(
     mushId,
     kind,
     options.originalName,
-    options.contentType,
+    options.contentType
   );
 
   await writeBufferToGcs(objectName, buffer, options.contentType);
@@ -258,21 +271,58 @@ export async function saveSonificationFromUrl(
   mushId: string,
   kind: SonificationKind,
   url: string,
-  options: { fallbackName?: string } = {},
+  options: { fallbackName?: string } = {}
 ): Promise<SonificationStoredValue> {
   const response = await fetch(url);
   if (!response.ok || !response.body) {
-    throw new Error(`Failed to download audio from ${url} (${response.status})`);
+    throw new Error(
+      `Failed to download audio from ${url} (${response.status})`
+    );
   }
 
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  const contentType =
-    response.headers.get("content-type") || "audio/mpeg";
+  const contentType = response.headers.get("content-type") || "audio/mpeg";
 
   return saveSonificationBuffer(mushId, kind, buffer, {
     originalName: options.fallbackName,
     contentType,
   });
+}
+
+export async function downloadSonificationBuffer(
+  mushId: string,
+  kind: SonificationKind
+): Promise<{
+  buffer: Buffer;
+  objectName: string;
+  contentType: string;
+}> {
+  const current = await fetchCurrentPaths(mushId);
+  if (!current) {
+    throw new Error(`Unknown mushroom id: ${mushId}`);
+  }
+
+  const columnValue = kind === "raw" ? current.raw : current.suno;
+  const objectName = normaliseObjectPath(columnValue ?? null);
+  if (!objectName) {
+    throw new Error(`No stored ${kind} audio found for mushroom ${mushId}`);
+  }
+
+  const file = bucket.file(objectName);
+  const [metadata] =
+    (await file
+      .getMetadata()
+      .catch(() => [{ contentType: "audio/mpeg" } as any])) ?? [];
+  const [data] = await file.download();
+
+  return {
+    buffer: data,
+    objectName,
+    contentType:
+      typeof metadata?.contentType === "string"
+        ? metadata.contentType
+        : "audio/mpeg",
+  };
 }
