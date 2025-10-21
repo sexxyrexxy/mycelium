@@ -30,7 +30,7 @@ export function drawBioluminescentMushrooms(
       </feMerge>
     `);
 
-  const numMushrooms = Math.floor(Math.random() * (80 - 60 + 1)) + 60;
+  const numMushrooms = 80;
   const sizeScale = d3.scaleLinear().domain([0, numMushrooms]).range([5, 15]);
   const yScale = d3.scaleLinear().domain([0, numMushrooms]).range([height * 0.1, height * 0.9]);
   const colorInterpolator = d3.interpolateRgb("#0a3d62", "#4cb7b5");
