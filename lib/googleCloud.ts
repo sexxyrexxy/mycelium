@@ -4,9 +4,34 @@ import fs from "fs";
 import path from "path";
 
 type ServiceAccount = {
-  client_email: string;
+  type?: string;
+  project_id?: string;
+  private_key_id?: string;
   private_key: string;
+  client_email: string;
+  client_id?: string;
+  auth_uri?: string;
+  token_uri?: string;
+  auth_provider_x509_cert_url?: string;
+  client_x509_cert_url?: string;
+  universe_domain?: string;
 };
+
+const INDIVIDUAL_CREDENTIAL_ENV_KEYS = {
+  type: "GOOGLE_APPLICATION_CREDENTIALS_TYPE",
+  project_id: "GOOGLE_APPLICATION_CREDENTIALS_PROJECT_ID",
+  private_key_id: "GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY_ID",
+  private_key: "GOOGLE_APPLICATION_CREDENTIALS_PRIVATE_KEY",
+  client_email: "GOOGLE_APPLICATION_CREDENTIALS_CLIENT_EMAIL",
+  client_id: "GOOGLE_APPLICATION_CREDENTIALS_CLIENT_ID",
+  auth_uri: "GOOGLE_APPLICATION_CREDENTIALS_AUTH_URI",
+  token_uri: "GOOGLE_APPLICATION_CREDENTIALS_TOKEN_URI",
+  auth_provider_x509_cert_url: "GOOGLE_APPLICATION_CREDENTIALS_AUTH_PROVIDER_X509_CERT_URL",
+  client_x509_cert_url: "GOOGLE_APPLICATION_CREDENTIALS_CLIENT_X509_CERT_URL",
+  universe_domain: "GOOGLE_APPLICATION_CREDENTIALS_UNIVERSE_DOMAIN",
+} as const;
+
+type IndividualCredentialKey = keyof typeof INDIVIDUAL_CREDENTIAL_ENV_KEYS;
 
 const DEFAULT_KEY_FILE = "mycelium-470904-5621723dfeff.json";
 
@@ -83,6 +108,9 @@ function resolveCredentials(): ServiceAccount | undefined {
     if (parsed) return parsed;
   }
 
+  const fromEnvParts = resolveCredentialsFromIndividualEnv();
+  if (fromEnvParts) return fromEnvParts;
+
   const explicitPath =
     process.env.GOOGLE_APPLICATION_CREDENTIALS ??
     process.env.GOOGLE_APPLICATION_CREDENTIALS_FILE;
@@ -94,6 +122,34 @@ function resolveCredentials(): ServiceAccount | undefined {
 
   const fallbackPath = path.resolve(process.cwd(), DEFAULT_KEY_FILE);
   return tryReadJson(fallbackPath);
+}
+
+function resolveCredentialsFromIndividualEnv(): ServiceAccount | undefined {
+  let hasAnyValue = false;
+  const credentials: Partial<Record<IndividualCredentialKey, string>> = {};
+
+  for (const [field, envKey] of Object.entries(
+    INDIVIDUAL_CREDENTIAL_ENV_KEYS,
+  ) as Array<[IndividualCredentialKey, string]>) {
+    const value = process.env[envKey];
+    if (!value) continue;
+    hasAnyValue = true;
+    credentials[field] =
+      field === "private_key" ? value.replace(/\\n/g, "\n") : value;
+  }
+
+  if (!hasAnyValue) return undefined;
+
+  if (!credentials.client_email || !credentials.private_key) {
+    if (typeof console !== "undefined") {
+      console.warn(
+        "[googleCloud] Incomplete GOOGLE_APPLICATION_CREDENTIALS_* variables detected. Expected at least client_email and private_key.",
+      );
+    }
+    return undefined;
+  }
+
+  return credentials as ServiceAccount;
 }
 
 function tryParseJson(value: string): ServiceAccount | undefined {
