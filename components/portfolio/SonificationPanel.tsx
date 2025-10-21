@@ -199,6 +199,8 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   const [rawSynthFile, setRawSynthFile] = useState<File | null>(null);
   const [rawSynthUrl, setRawSynthUrl] = useState<string | null>(null);
   const [synthUploadBusy, setSynthUploadBusy] = useState(false);
+  const [hasStoredSynth, setHasStoredSynth] = useState(false);
+  const [hasStoredSuno, setHasStoredSuno] = useState(false);
   const [csvSamples, setCsvSamples] = useState<SignalDatum[]>([]);
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvError, setCsvError] = useState<string | null>(null);
@@ -291,6 +293,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           }
           shouldAutoplayRawRef.current = false;
           setRawSynthUrl(signedUrl);
+          setHasStoredSynth(true);
           setSynthStatus((prev) =>
             prev === "rendered" || prev === "stored" ? "stored" : prev,
           );
@@ -343,6 +346,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         if (signedUrl) {
           setSynthFullUrl(signedUrl);
           setSynthStreamUrl(signedUrl);
+          setHasStoredSuno(true);
         }
       } catch (err) {
         console.error("[Sonification] suno persist error", err);
@@ -369,6 +373,8 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     shouldAutoplayRawRef.current = false;
     setSynthStatus("idle");
     setStatus("idle");
+    setHasStoredSynth(false);
+    setHasStoredSuno(false);
 
     if (!mushId) {
       return;
@@ -399,6 +405,8 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
         const rawUrl: string | null = payload?.rawSound?.signedUrl ?? null;
         const sunoUrl: string | null = payload?.sunoSound?.signedUrl ?? null;
+        setHasStoredSynth(Boolean(rawUrl));
+        setHasStoredSuno(Boolean(sunoUrl));
 
         if (rawUrl) {
           shouldAutoplayRawRef.current = false;
@@ -781,7 +789,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
   }, [analysis, busy, pollStatus]);
 
   const onRenderSynth = useCallback(async () => {
-    if (synthBusy || synthUploadBusy) return;
+    if (synthBusy || synthUploadBusy || hasStoredSynth) return;
     if (!samples.length) {
       setSynthError(
         "No signal data available yet. Check the source and try again."
@@ -829,10 +837,10 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     } finally {
       setSynthBusy(false);
     }
-  }, [synthBusy, synthUploadBusy, samples, mushId, persistRawAudio]);
+  }, [synthBusy, synthUploadBusy, samples, mushId, persistRawAudio, hasStoredSynth]);
 
   const onUploadSynth = useCallback(async () => {
-    if (synthUploadBusy || synthBusy) return;
+    if (synthUploadBusy || synthBusy || hasStoredSuno) return;
     if (!rawSynthFile) {
       setSynthError("Render the synth sonification first.");
       setSynthStatus("error");
@@ -884,6 +892,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     synthUploadBusy,
     pollSynthStatus,
     rawSynthFile,
+    hasStoredSuno,
   ]);
 
   const signalLoadingState = signalLoading && !analysis;
@@ -893,9 +902,20 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     synthUploadBusy ||
     signalLoading ||
     !analysis ||
-    !samples.length;
+    !samples.length ||
+    hasStoredSynth;
   const disableSynthUploadButton =
-    synthUploadBusy || synthBusy || !rawSynthFile;
+    synthUploadBusy || synthBusy || !rawSynthFile || hasStoredSuno;
+  const synthButtonLabel = synthBusy
+    ? "Rendering synth..."
+    : hasStoredSynth
+      ? "Synth ready"
+      : "Synth";
+  const synthJamButtonLabel = synthUploadBusy
+    ? "Adding groove..."
+    : hasStoredSuno
+      ? "Synth Jam ready"
+      : "Synth Jam";
 
   return (
     <Card>
@@ -933,17 +953,27 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         <button
           onClick={onRenderSynth}
           disabled={disableSynthRenderButton}
-          className="px-4 py-2 rounded-md bg-[#AAA432]/70 text-white hover:bg-[#AAA432]"
+          title={
+            hasStoredSynth
+              ? "Synth audio already generated for this mushroom."
+              : undefined
+          }
+          className="px-4 py-2 rounded-md bg-[#AAA432]/70 text-white hover:bg-[#AAA432] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[#AAA432]/70"
         >
-          {synthBusy ? "Rendering synth..." : "Synth"}
+          {synthButtonLabel}
         </button>
 
         <button
           onClick={onUploadSynth}
           disabled={disableSynthUploadButton}
-          className="px-4 py-2 rounded-md bg-[#AA3232]/70 text-white hover:bg-[#AA3232]"
+          title={
+            hasStoredSuno
+              ? "Enhanced synth already stored for this mushroom."
+              : undefined
+          }
+          className="px-4 py-2 rounded-md bg-[#AA3232]/70 text-white hover:bg-[#AA3232] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[#AA3232]/70"
         >
-          {synthUploadBusy ? "Adding groove..." : "Synth Jam"}
+          {synthJamButtonLabel}
         </button>
 
         <div className="text-sm">
