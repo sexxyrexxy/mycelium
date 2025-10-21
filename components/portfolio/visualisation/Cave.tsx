@@ -4,8 +4,9 @@ export function drawBioluminescentMushrooms(
   svgElement: SVGSVGElement,
   width: number,
   height: number,
-  baselineArray: number[],
-  rateOfChangeArray: number[],
+  baselineArray: number[] = [],
+  rateOfChangeArray: number[] = [],
+  spikesArray: number[] = [],
   onColorChange?: (color: string) => void
 ) {
   const svg = d3.select(svgElement);
@@ -13,17 +14,16 @@ export function drawBioluminescentMushrooms(
 
   const defs = svg.append("defs");
 
-  // Create a reusable glow filter
   defs.append("filter")
     .attr("id", "base-glow")
     .attr("x", "-50%")
     .attr("y", "-100%")
     .attr("width", "200%")
-    .attr("height", "400%") 
+    .attr("height", "400%")
     .html(`
       <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
       <feMerge>
-        <feMergeNode in="blur" />
+        <feMergeNode in="blur" /> 
         <feMergeNode in="blur" />
         <feMergeNode in="blur" />
         <feMergeNode in="SourceGraphic" />
@@ -38,7 +38,6 @@ export function drawBioluminescentMushrooms(
   const mushrooms: {
     cap: d3.Selection<SVGPathElement, unknown, null, undefined>;
     glow: d3.Selection<SVGPathElement, unknown, null, undefined>;
-    rate: number;
     phase: number;
     baseColor: string;
   }[] = [];
@@ -48,25 +47,21 @@ export function drawBioluminescentMushrooms(
     const x = Math.random() * width;
     const y = yScale(i);
 
-    // Cap path
     const pathData = d3.path();
     pathData.moveTo(x - size, y);
     pathData.arc(x, y, size, Math.PI, 0, false);
 
-    // Glow path (separate, underneath the cap)
     const glowPath = svg.append("path")
       .attr("d", pathData.toString())
       .attr("fill", "#000")
       .attr("filter", "url(#base-glow)")
-      .lower(); // Send to back
+      .lower();
 
-    // Main mushroom cap
     const cap = svg.append("path")
       .attr("d", pathData.toString())
       .attr("stroke", "#08304f")
       .attr("stroke-width", 1);
 
-    // Stem
     const stemHeight = size * 1.5;
     const stemWidth = size * 0.3;
     svg.append("rect")
@@ -79,12 +74,12 @@ export function drawBioluminescentMushrooms(
     mushrooms.push({
       cap,
       glow: glowPath,
-      rate: 0.05,
       phase: Math.random() * Math.PI * 2,
       baseColor: colorInterpolator(0),
     });
   }
 
+  // --- Baseline update ---
   let index = 0;
   const baselineUpdate = d3.interval(() => {
     if (index >= baselineArray.length) index = 0;
@@ -94,30 +89,73 @@ export function drawBioluminescentMushrooms(
     if (onColorChange) onColorChange(baseColor);
 
     mushrooms.forEach((m) => {
-      const roc = rateOfChangeArray[index % rateOfChangeArray.length] ?? 0.2;
-      m.rate = 0.5 + roc * 2.0;
       m.baseColor = baseColor;
-
       m.cap.attr("fill", baseColor);
     });
 
     index++;
   }, 100);
 
-  const glowLoop = d3.timer((elapsed) => {
-    const t = elapsed / 1000;
+  // --- Spike tracking ---
+  const activeSpikes: { m: typeof mushrooms[0]; phase: number }[] = [];
+  const seenSpikes = new Set<number>();
+  let spikeIndex = 0;
 
+  // --- Glow loop (unchanged speed) ---
+  let t = 0;
+  let speedIndex = 0;
+
+  const glowLoop = d3.interval(() => {
+    if (rateOfChangeArray.length > 0) {
+      const currentSpeed = rateOfChangeArray[speedIndex % rateOfChangeArray.length];
+      t += currentSpeed;
+      speedIndex++;
+    } else {
+      t += 0.02;
+    }
+
+    // --- Base glow ---
     mushrooms.forEach((m) => {
-      // Pulse glow opacity based on sin curve
-      const pulse = 0.3 + 0.7 * Math.abs(Math.sin(t * m.rate + m.phase)); // range [0.3, 1.0]
+      const pulse = (Math.sin(t + m.phase) + 1) / 2;
       const glowColor = d3.color(m.baseColor);
       if (!glowColor) return;
-
       glowColor.opacity = pulse;
       m.glow.attr("fill", glowColor.toString());
     });
-  });
 
+    // --- Detect new spikes ---
+    if (spikeIndex < spikesArray.length) {
+      if (spikesArray[spikeIndex] === 1 && !seenSpikes.has(spikeIndex)) {
+        seenSpikes.add(spikeIndex);
+        console.log("Spike detected at index:", spikeIndex);
+
+        const numMushroomsToGlow = 3;
+        for (let j = 0; j < numMushroomsToGlow; j++) {
+          const m = mushrooms[Math.floor(Math.random() * mushrooms.length)];
+          activeSpikes.push({ m, phase: t });
+        }
+      }
+      spikeIndex++;
+    } else {
+      // reset once all spikes processed
+      spikeIndex = 0;
+      seenSpikes.clear();
+      console.log("Spike array complete — resetting");
+    }
+
+    // --- Animate spikes using same sin fade ---
+    for (let i = activeSpikes.length - 1; i >= 0; i--) {
+      const spike = activeSpikes[i];
+      const pulse = (Math.sin(t - spike.phase) + 1) / 2;
+      const spikeColor = d3.color("white")!;
+      spikeColor.opacity = pulse;
+      spike.m.glow.attr("fill", spikeColor.toString());
+
+      if (pulse < 0.01) activeSpikes.splice(i, 1);
+    }
+  }, 10);
+
+  // --- Cleanup ---
   return () => {
     baselineUpdate.stop();
     glowLoop.stop();
