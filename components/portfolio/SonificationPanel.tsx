@@ -841,7 +841,40 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
   const onUploadSynth = useCallback(async () => {
     if (synthUploadBusy || synthBusy || hasStoredSuno) return;
-    if (!rawSynthFile) {
+
+    let fileToUpload = rawSynthFile;
+    if (!fileToUpload && rawSynthUrl) {
+      try {
+        const response = mushId
+          ? await fetch(
+              `/api/mushroom/${encodeURIComponent(
+                mushId,
+              )}/sonification/raw-file`,
+              { cache: "no-store" },
+            )
+          : await fetch(rawSynthUrl);
+        if (!response.ok) {
+          throw new Error(`Failed to download stored synth (${response.status})`);
+        }
+        const blob = await response.blob();
+        fileToUpload = new File(
+          [blob],
+          mushId ? `mushroom-${mushId}-synth.mp3` : "stored-synth.mp3",
+          { type: blob.type || "audio/mpeg" },
+        );
+        setRawSynthFile(fileToUpload);
+      } catch (downloadErr) {
+        setSynthError(
+          downloadErr instanceof Error
+            ? downloadErr.message
+            : "Unable to reuse stored synth audio.",
+        );
+        setSynthStatus("error");
+        return;
+      }
+    }
+
+    if (!fileToUpload) {
       setSynthError("Render the synth sonification first.");
       setSynthStatus("error");
       return;
@@ -855,7 +888,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
 
     try {
       const form = new FormData();
-      form.set("file", rawSynthFile);
+      form.set("file", fileToUpload);
       if (mushId) {
         form.set("title", `Mushroom ${mushId} Synth Sonification`);
       } else {
@@ -866,7 +899,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
           ? `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification derived from ${analysisSummary.windowCount} mushroom signal windows. Preserve the melodic contour while adding gentle ambient textures, when notes are higher, add more energy and pads. No vocals or aggressive percussion. Duration around two minutes.`
           : `Enhance this ${SYNTH_TARGET_DURATION_SEC}-second synth sonification of mushroom electrical signals. Preserve the melodic contour while adding gentle ambient textures. No vocals or aggressive percussion. Duration around two minutes.`;
       form.set("prompt", promptText);
-      form.set("style", "sythetic soundscape, ambient, experimental");
+      form.set("style", "synthetic soundscape, ambient, experimental");
 
       const uploadRes = await fetch("/api/suno/upload-sonification", {
         method: "POST",
@@ -892,6 +925,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     synthUploadBusy,
     pollSynthStatus,
     rawSynthFile,
+    rawSynthUrl,
     hasStoredSuno,
   ]);
 
@@ -905,17 +939,21 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
     !samples.length ||
     hasStoredSynth;
   const disableSynthUploadButton =
-    synthUploadBusy || synthBusy || !rawSynthFile || hasStoredSuno;
+    synthUploadBusy ||
+    synthBusy ||
+    (!rawSynthFile && !rawSynthUrl) ||
+    hasStoredSuno;
   const synthButtonLabel = synthBusy
     ? "Rendering synth..."
     : hasStoredSynth
       ? "Synth ready"
       : "Synth";
-  const synthJamButtonLabel = synthUploadBusy
-    ? "Adding groove..."
-    : hasStoredSuno
-      ? "Synth Jam ready"
-      : "Synth Jam";
+  const synthJamButtonLabel =
+    synthUploadBusy && (!rawSynthFile && !rawSynthUrl)
+      ? "Adding groove..."
+      : hasStoredSuno
+        ? "Synth Jam ready"
+        : "Synth Jam";
 
   return (
     <Card>

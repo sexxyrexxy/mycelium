@@ -289,3 +289,39 @@ export async function saveSonificationFromUrl(
     contentType,
   });
 }
+
+export async function downloadSonificationBuffer(
+  mushId: string,
+  kind: SonificationKind,
+): Promise<{
+  buffer: Buffer;
+  objectName: string;
+  contentType: string;
+}> {
+  const current = await fetchCurrentPaths(mushId);
+  if (!current) {
+    throw new Error(`Unknown mushroom id: ${mushId}`);
+  }
+
+  const columnValue = kind === "raw" ? current.raw : current.suno;
+  const objectName = normaliseObjectPath(columnValue ?? null);
+  if (!objectName) {
+    throw new Error(`No stored ${kind} audio found for mushroom ${mushId}`);
+  }
+
+  const file = bucket.file(objectName);
+  const [metadata] =
+    (await file
+      .getMetadata()
+      .catch(() => [{ contentType: "audio/mpeg" } as any])) ?? [];
+  const [data] = await file.download();
+
+  return {
+    buffer: data,
+    objectName,
+    contentType:
+      typeof metadata?.contentType === "string"
+        ? metadata.contentType
+        : "audio/mpeg",
+  };
+}
