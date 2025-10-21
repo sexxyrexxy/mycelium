@@ -12,13 +12,21 @@ type SunoDataTrack = {
   duration?: number;
 };
 type SunoStatusResponse = {
-  status: string;
+  status?: string;
   response?: { sunoData?: SunoDataTrack[] };
+  error?: string;
 };
+
+type SunoGenerateResponse = {
+  taskId?: string;
+  error?: string;
+};
+
+type SunoStatus = "idle" | "starting" | "queued" | "error" | "SUCCESS" | "unknown";
 
 export default function SunoGenerateButton({ analysis }: { analysis: SignalWindowsAnalysis | null }) {
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [status, setStatus] = useState("idle");
+  const [status, setStatus] = useState<SunoStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [fullUrl, setFullUrl] = useState<string | null>(null);
@@ -41,41 +49,48 @@ export default function SunoGenerateButton({ analysis }: { analysis: SignalWindo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = await res.json();
-    if (!res.ok) {
-      setError(json.error ?? "Failed to start");
+    const parsed = (await res.json()) as SunoGenerateResponse | null;
+    if (!res.ok || !parsed?.taskId) {
+      setError(parsed?.error ?? "Failed to start");
       setStatus("error");
       return;
     }
-    setTaskId(json.taskId);
+    setTaskId(parsed.taskId);
     setStatus("queued");
   }
 
   useEffect(() => {
     if (!taskId) return;
-    let t: any;
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
     const poll = async () => {
       try {
         const res = await fetch(`/api/suno/status?taskId=${encodeURIComponent(taskId)}`, { cache: "no-store" });
-        const data: SunoStatusResponse = await res.json();
+        const data = (await res.json()) as SunoStatusResponse;
 
-        setStatus(data.status ?? "unknown");
+        setStatus((data.status as SunoStatus) ?? "unknown");
         const first = data?.response?.sunoData?.[0];
-        if (first?.streamAudioUrl && !streamUrl) setStreamUrl(first.streamAudioUrl);
-        if (first?.audioUrl) setFullUrl(first.audioUrl);
+        if (first?.streamAudioUrl) {
+          setStreamUrl((prev) => prev ?? first.streamAudioUrl ?? null);
+        }
+        if (first?.audioUrl) {
+          setFullUrl((prev) => prev ?? first.audioUrl ?? null);
+        }
 
         if ((data.status ?? "") !== "SUCCESS") {
-          t = setTimeout(poll, 5000);
+          timeoutHandle = setTimeout(poll, 5000);
         }
-      } catch (e: any) {
-        setError(e.message);
-        t = setTimeout(poll, 8000);
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : "Failed to poll status.";
+        setError(message);
+        timeoutHandle = setTimeout(poll, 8000);
       }
     };
 
     poll();
-    return () => clearTimeout(t);
+    return () => {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    };
   }, [taskId]);
 
   return (

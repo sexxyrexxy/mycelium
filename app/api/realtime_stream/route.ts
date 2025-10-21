@@ -138,15 +138,11 @@
 
 // app/api/stream/route.ts
 import { NextRequest } from "next/server";
-import { PubSub } from "@google-cloud/pubsub";
+import type { Message } from "@google-cloud/pubsub";
+import { getPubSubClient, googleConfig } from "@/lib/googleCloud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// ---- CONFIG ----
-const PROJECT_ID = "mycelium-470904";
-const KEY_FILE = "mycelium-470904-5621723dfeff.json";
-const SUBSCRIPTION_ID = "bigquery-signal-sub"; // <- your Pub/Sub subscription name
 
 export async function GET(req: NextRequest) {
   const encoder = new TextEncoder();
@@ -163,15 +159,11 @@ export async function GET(req: NextRequest) {
       }, 15000);
 
       // Setup Pub/Sub client
-      const pubsub = new PubSub({
-        projectId: PROJECT_ID,
-        keyFilename: KEY_FILE,
-      });
-
-      const subscription = pubsub.subscription(SUBSCRIPTION_ID);
+      const pubsub = getPubSubClient();
+      const subscription = pubsub.subscription(googleConfig.pubsubSubscription);
 
       // Message handler
-      const messageHandler = (message: any) => {
+      const messageHandler = (message: Message) => {
         try {
           const data = JSON.parse(message.data.toString());
           sendEvent({ type: "row", item: data });
@@ -197,7 +189,7 @@ export async function GET(req: NextRequest) {
         try { controller.close(); } catch {}
       };
 
-      // @ts-ignore
+      // @ts-expect-error Request.signal is optional in the Next.js runtime
       req.signal?.addEventListener?.("abort", abort);
     },
   });

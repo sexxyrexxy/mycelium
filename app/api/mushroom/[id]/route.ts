@@ -3,33 +3,31 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { BigQuery } from "@google-cloud/bigquery";
-import fs from "fs";
-import path from "path";
+import { getBigQueryClient, googleConfig } from "@/lib/googleCloud";
 
-// ---- CONFIG ----
-const BQ_PROJECT_ID = "mycelium-470904";
-const DATASET_ID = "MushroomData";
-const SIGNALS_TABLE = "Mushroom_Signal";
-const LOCATION = "australia-southeast1";
-const BQ_KEY_FILE = "mycelium-470904-5621723dfeff.json";
-
-// ---- Init BigQuery ----
-const bqKeyPath = path.join(process.cwd(), BQ_KEY_FILE);
-const bqKey = JSON.parse(fs.readFileSync(bqKeyPath, "utf8"));
-const bq = new BigQuery({
-  projectId: BQ_PROJECT_ID,
-  credentials: {
-    client_email: bqKey.client_email,
-    private_key: bqKey.private_key,
-  },
-});
+const bq = getBigQueryClient();
 
 // ---- Helpers ----
-function tsString(ts: any): string {
+type TimestampLike =
+  | Date
+  | string
+  | number
+  | null
+  | undefined
+  | { value?: string | number | null };
+
+interface SignalRow {
+  Timestamp: TimestampLike;
+  Signal_mV: number | null;
+}
+
+function tsString(ts: TimestampLike): string {
   if (ts instanceof Date) return ts.toISOString();
   if (typeof ts === "string") return ts;
-  if (ts?.value) return String(ts.value);
+  if (typeof ts === "number") return new Date(ts).toISOString();
+  if (ts && typeof ts === "object" && "value" in ts && ts.value != null) {
+    return String(ts.value);
+  }
   return String(ts);
 }
 
@@ -81,7 +79,7 @@ const rangeMap: Record<string, { label: string; hours: number }> = {
           Timestamp,
           Signal_mV,
           MAX(Timestamp) OVER() AS latest_ts
-        FROM \`${BQ_PROJECT_ID}.${DATASET_ID}.${SIGNALS_TABLE}\`
+        FROM \`${googleConfig.projectId}.${googleConfig.datasetId}.${googleConfig.signalsTable}\`
         WHERE MushID = @mushId
       )
       SELECT Timestamp, Signal_mV
@@ -106,15 +104,15 @@ const rangeMap: Record<string, { label: string; hours: number }> = {
       params.rowLimit = limit;
     }
 
-    const [rows] = await bq.query({
+    const [rows] = await bq.query<SignalRow>({
       query,
       params,
-      location: LOCATION,
+      location: googleConfig.location,
     });
 
-    const signals = rows.map((r: any) => ({
-      timestamp: tsString(r.Timestamp),
-      signal: r.Signal_mV ?? null,
+    const signals = rows.map((row) => ({
+      timestamp: tsString(row.Timestamp),
+      signal: row.Signal_mV ?? null,
     }));
 
     return NextResponse.json({
@@ -127,10 +125,11 @@ const rangeMap: Record<string, { label: string; hours: number }> = {
         hours: hoursWindow,
       },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("mushroom/[id] error:", e);
+    const message = e instanceof Error ? e.message : "Failed to fetch mushroom";
     return NextResponse.json(
-      { error: e?.message ?? "Failed to fetch mushroom" },
+      { error: message },
       { status: 500 }
     );
   }

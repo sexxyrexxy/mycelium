@@ -3,47 +3,47 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { BigQuery } from "@google-cloud/bigquery";
+import { getBigQueryClient, googleConfig } from "@/lib/googleCloud";
+
+type TimestampLike =
+  | Date
+  | string
+  | number
+  | null
+  | undefined
+  | { value?: string | number | null };
 
 type SignalRow = {
   mushId: number;
   typeOfMush: string | null;
   name: string | null;
-  timestamp: string;      // ISO
+  timestamp: string;
   signal_mV: number | null;
 };
 
-const PROJECT_ID = "mycelium-470904";
-const keyJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON
-  ? JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON)
-  : undefined;
+type RawSignalRow = {
+  mushId: number;
+  typeOfMush: string | null;
+  name: string | null;
+  timestamp: TimestampLike;
+  signal_mV: number | null;
+};
 
-const bq =
-  (global as any)._bq ??
-  new BigQuery(
-    keyJson
-      ? {
-          projectId: keyJson.project_id || PROJECT_ID,
-          credentials: {
-            client_email: keyJson.client_email,
-            private_key: keyJson.private_key,
-          },
-        }
-      : { projectId: PROJECT_ID }
-  );
-(global as any)._bq = bq;
+const bq = getBigQueryClient();
 
-function iso(ts: any) {
+function iso(ts: TimestampLike): string {
   if (ts instanceof Date) return ts.toISOString();
-  if (ts?.value) {
-    const d = new Date(ts.value);
-    return Number.isNaN(d.getTime()) ? String(ts.value) : d.toISOString();
-  }
   if (typeof ts === "string") {
-    const d = new Date(ts);
-    return Number.isNaN(d.getTime()) ? ts : d.toISOString();
+    const parsed = new Date(ts);
+    return Number.isNaN(parsed.getTime()) ? ts : parsed.toISOString();
   }
-  return ts;
+  if (typeof ts === "number") {
+    return new Date(ts).toISOString();
+  }
+  if (ts && typeof ts === "object" && "value" in ts && ts.value != null) {
+    return iso(ts.value);
+  }
+  return String(ts ?? "");
 }
 
 export async function GET(req: Request) {
@@ -57,7 +57,7 @@ export async function GET(req: Request) {
     const since = searchParams.get("since"); // optional ISO date filter
 
     const where = [`Msuh_ID = @mushId`];
-    const params: Record<string, any> = { mushId };
+    const params: Record<string, string | number> = { mushId };
     if (since) {
       where.push(`Timestamp >= @since`);
       params.since = since;
@@ -70,25 +70,29 @@ export async function GET(req: Request) {
         Name                   AS name,
         Timestamp              AS timestamp,
         Signal_mV              AS signal_mV
-      FROM \`${PROJECT_ID}.MushroomData1.Table1\`
+      FROM \`${googleConfig.projectId}.${googleConfig.legacyDatasetId}.${googleConfig.legacyTableName}\`
       WHERE ${where.join(" AND ")}
       ORDER BY Timestamp ASC
       LIMIT @limit
     `;
 
-    const [rows] = await bq.query({
+    const [rows] = await bq.query<RawSignalRow>({
       query,
       params: { ...params, limit },
+      location: googleConfig.uploadLocation,
     });
 
-    const out: SignalRow[] = rows.map((r: any) => ({
-      ...r,
-      timestamp: iso(r.timestamp),
+    const out: SignalRow[] = rows.map((row) => ({
+      ...row,
+      timestamp: iso(row.timestamp),
     }));
 
     return NextResponse.json(out);
-  } catch (e) {
+  } catch (e: unknown) {
     console.error(e);
-    return NextResponse.json({ error: "Failed to fetch signals" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch signals" },
+      { status: 500 }
+    );
   }
 }

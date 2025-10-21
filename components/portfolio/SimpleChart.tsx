@@ -2,7 +2,14 @@
 "use client";
 
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { Time } from "lightweight-charts";
+import type {
+  IChartApi,
+  ISeriesApi,
+  LineSeriesPartialOptions,
+  MouseEventParams,
+  SeriesDataItemTypeMap,
+  Time,
+} from "lightweight-charts";
 
 export type Point = { time: Time; value: number };
 
@@ -114,10 +121,10 @@ function clampDataDensity(sorted: Point[]): Point[] {
 export default function SimpleChart({ data, height }: { data: Point[]; height?: number }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
-  const ampSeriesRef = useRef<any>(null);
-  const rocSeriesRef = useRef<any>(null);
+  const chartRef = useRef<IChartApi<Time> | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const ampSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const rocSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   // fixed windows
@@ -179,15 +186,10 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
       });
       chartRef.current = chart;
 
-      const anyChart = chart as any;
-      const mkLine = (opts: any) =>
-        typeof anyChart.addSeries === "function" && (LWC as any).LineSeries
-          ? anyChart.addSeries((LWC as any).LineSeries, opts)
-          : anyChart.addLineSeries(opts);
-
-      seriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false });
-      ampSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#10b981" });
-      rocSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#f59e0b" });
+      const baseOptions: LineSeriesPartialOptions = { lineWidth: 2, priceLineVisible: false };
+      seriesRef.current = chart.addLineSeries(baseOptions);
+      ampSeriesRef.current = chart.addLineSeries({ ...baseOptions, color: "#10b981" });
+      rocSeriesRef.current = chart.addLineSeries({ ...baseOptions, color: "#f59e0b" });
 
       // tooltip
       const tip = document.createElement("div");
@@ -204,25 +206,57 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
       wrapRef.current?.appendChild(tip);
       tooltipRef.current = tip;
 
-      const onMove = (param: any) => {
-        if (!tooltipRef.current) return;
-        const t = tooltipRef.current;
-        if (!param.point || !param.time) { t.style.display = "none"; return; }
+      const getPointValue = (point?: SeriesDataItemTypeMap["Line"]) =>
+        point && "value" in point && typeof point.value === "number"
+          ? point.value
+          : undefined;
 
-        const baseP = param.seriesData.get(seriesRef.current);
-        const ampP  = ampSeriesRef.current ? param.seriesData.get(ampSeriesRef.current) : undefined;
-        const rocP  = rocSeriesRef.current ? param.seriesData.get(rocSeriesRef.current) : undefined;
-        if (!baseP || baseP.value === undefined) { t.style.display = "none"; return; }
+      const onMove = (param: MouseEventParams<Time>) => {
+        const tooltipEl = tooltipRef.current;
+        const baseSeries = seriesRef.current;
+        if (!tooltipEl || !baseSeries) return;
+        if (!param.point || !param.time) {
+          tooltipEl.style.display = "none";
+          return;
+        }
 
-        const timeLabel = typeof param.time === "number" ? hms(param.time as number) : String(param.time);
-        const baseRow = `<div>value: <b>${Number(baseP.value).toFixed(4)}</b></div>`;
-        const ampRow  = ampP && ampP.value !== undefined ? `<div>amplitude: <b>${Number(ampP.value).toFixed(4)}</b></div>` : "";
-        const rocRow  = rocP && rocP.value !== undefined ? `<div>rate: <b>${Number(rocP.value).toFixed(4)}</b> /s</div>` : "";
+        const basePoint = param.seriesData.get(baseSeries);
+        if (!basePoint) {
+          tooltipEl.style.display = "none";
+          return;
+        }
 
-        t.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${timeLabel}</div>${baseRow}${ampRow}${rocRow}`;
-        t.style.left = `${param.point.x + 12}px`;
-        t.style.top  = `${param.point.y + 12}px`;
-        t.style.display = "block";
+        const ampSeries = ampSeriesRef.current;
+        const rocSeries = rocSeriesRef.current;
+        const ampPoint = ampSeries ? param.seriesData.get(ampSeries) : undefined;
+        const rocPoint = rocSeries ? param.seriesData.get(rocSeries) : undefined;
+
+        const baseValue = getPointValue(basePoint);
+        if (baseValue === undefined) {
+          tooltipEl.style.display = "none";
+          return;
+        }
+
+        const timeLabel =
+          typeof param.time === "number"
+            ? hms(param.time)
+            : String(param.time);
+        const ampValue = getPointValue(ampPoint);
+        const rocValue = getPointValue(rocPoint);
+
+        const ampRow =
+          ampValue !== undefined
+            ? `<div>amplitude: <b>${ampValue.toFixed(4)}</b></div>`
+            : "";
+        const rocRow =
+          rocValue !== undefined
+            ? `<div>rate: <b>${rocValue.toFixed(4)}</b> /s</div>`
+            : "";
+
+        tooltipEl.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${timeLabel}</div><div>value: <b>${baseValue.toFixed(4)}</b></div>${ampRow}${rocRow}`;
+        tooltipEl.style.left = `${param.point.x + 12}px`;
+        tooltipEl.style.top = `${param.point.y + 12}px`;
+        tooltipEl.style.display = "block";
       };
       chart.subscribeCrosshairMove(onMove);
 
@@ -253,7 +287,7 @@ export default function SimpleChart({ data, height }: { data: Point[]; height?: 
       disposed = true;
       cleanup();
     };
-  }, []);
+  }, [height]);
 
   useEffect(() => {
     if (chartRef.current && typeof height === "number" && !Number.isNaN(height)) {

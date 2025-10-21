@@ -1,12 +1,8 @@
-import { ChartLineInteractive } from "@/components/portfolio/summaryLineChart";
 import { SonificationPanel } from "@/components/portfolio/SonificationPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  MushroomGarden,
-  MushroomSprite,
-} from "@/components/portfolio/PixelMushrooms";
+import { MushroomSprite } from "@/components/portfolio/PixelMushrooms";
 import { useParams } from "next/navigation";
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RTLineChart } from "@/components/portfolio/RTLineChart";
 
 export default function Overview() {

@@ -2,11 +2,64 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import type { Time } from "lightweight-charts";
+import type {
+  ChartOptions,
+  DeepPartial,
+  IChartApi,
+  ISeriesApi,
+  LineSeriesPartialOptions,
+  MouseEventParams,
+  SeriesDataItemTypeMap,
+  Time,
+} from "lightweight-charts";
 
 export type Point = { time: Time; value: number };
 
-type RTPoint = { t: number | string; v: number | string };
+const TIME_KEYS = ["t", "time", "timestamp", "Timestamp"] as const;
+const VALUE_KEYS = ["v", "value", "signal", "Signal_mV"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+const pickValue = (
+  record: Record<string, unknown>,
+  keys: readonly string[],
+) => {
+  for (const key of keys) {
+    if (key in record) {
+      return record[key];
+    }
+  }
+  return undefined;
+};
+
+function unwrapTimestamp(input: unknown): string | number | null {
+  if (input == null) return null;
+  if (typeof input === "string" || typeof input === "number") return input;
+  if (isRecord(input) && "value" in input) {
+    return unwrapTimestamp(input.value);
+  }
+  return null;
+}
+
+function mapRawPoint(raw: unknown): Point | null {
+  if (!isRecord(raw)) return null;
+  const timeCandidate = unwrapTimestamp(pickValue(raw, TIME_KEYS));
+  if (timeCandidate == null) return null;
+
+  const valueCandidate = pickValue(raw, VALUE_KEYS);
+  if (valueCandidate == null) return null;
+
+  const numericValue =
+    typeof valueCandidate === "number" ? valueCandidate : Number(valueCandidate);
+  if (!Number.isFinite(numericValue)) return null;
+
+  return {
+    time: toTime(timeCandidate),
+    value: numericValue,
+  };
+}
 
 // ---------- helpers ----------
 const hms = (secs: number) => {
@@ -107,12 +160,10 @@ export default function RealTimeChart({
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
-  const ampSeriesRef = useRef<any>(null);
-  const rocSeriesRef = useRef<any>(null);
-  const spikeUpHistRef = useRef<any>(null);
-  const spikeDnHistRef = useRef<any>(null);
+  const chartRef = useRef<IChartApi<Time> | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const ampSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const rocSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
@@ -132,12 +183,14 @@ export default function RealTimeChart({
   const ampData = useMemo(() => amplitudeHalfP2P(sorted, AMP_WINDOW_SEC), [sorted]);
   const rocData = useMemo(() => rateOfChangeSlope(sorted, ROC_WINDOW_SEC), [sorted]);
 
-  // create chart once (keeps your v4/v5 compatibility)
+  // create chart once (reinitializes on height change for simplicity)
   useEffect(() => {
-    let cleanup = () => {};
+    let disposed = false;
+    let cleanup: (() => void) | undefined;
+
     (async () => {
-      const LWC = await import("lightweight-charts");
-      const { createChart, ColorType, LineStyle } = LWC;
+      const { createChart, ColorType, LineStyle } = await import("lightweight-charts");
+      if (disposed) return;
 
       const el = containerRef.current;
       if (!el) return;
@@ -145,94 +198,141 @@ export default function RealTimeChart({
       const rect = el.getBoundingClientRect();
       const initWidth = Math.max(320, Math.floor(rect.width) || 320);
 
-      const chart = createChart(el as any, {
+      const chartOptions: DeepPartial<ChartOptions> = {
         width: initWidth,
         height,
-        layout: { background: { type: ColorType.Solid, color: "#ffffff" }, textColor: "#111827", attributionLogo: false } as any,
+        layout: {
+          background: { type: ColorType.Solid, color: "#ffffff" },
+          textColor: "#111827",
+          attributionLogo: false,
+        },
         grid: {
-          vertLines: { color: "#e5e7eb", style: LineStyle.Solid } as any,
-          horzLines: { color: "#e5e7eb", style: LineStyle.Solid } as any,
-        } as any,
-        leftPriceScale: { visible: false, borderVisible: false } as any,
-        rightPriceScale: { borderVisible: false } as any,
-        timeScale: { timeVisible: true, secondsVisible: true, borderVisible: false, minBarSpacing: 0.01 } as any,
-        crosshair: { mode: 1 } as any,
-      });
+          vertLines: { color: "#e5e7eb", style: LineStyle.Solid },
+          horzLines: { color: "#e5e7eb", style: LineStyle.Solid },
+        },
+        leftPriceScale: { visible: false, borderVisible: false },
+        rightPriceScale: { borderVisible: false },
+        timeScale: {
+          timeVisible: true,
+          secondsVisible: true,
+          borderVisible: false,
+          minBarSpacing: 0.01,
+        },
+        crosshair: { mode: 1 },
+      };
+
+      const chart = createChart(el, chartOptions);
       chartRef.current = chart;
 
-      // v5/v4 compatible creators
-      const anyChart = chart as any;
-      const mkLine = (opts: any) =>
-        typeof anyChart.addSeries === "function" && (LWC as any).LineSeries
-          ? anyChart.addSeries((LWC as any).LineSeries, opts)
-          : anyChart.addLineSeries(opts);
-      const mkHist = (opts: any) =>
-        typeof anyChart.addSeries === "function" && (LWC as any).HistogramSeries
-          ? anyChart.addSeries((LWC as any).HistogramSeries, opts)
-          : anyChart.addHistogramSeries(opts);
-
-      seriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false });
-      ampSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#10b981" });
-      rocSeriesRef.current = mkLine({ lineWidth: 2, priceLineVisible: false, color: "#f59e0b" });
-
-      spikeUpHistRef.current = mkHist({ priceScaleId: "left", base: 0, color: "#ef4444", priceLineVisible: false });
-      spikeDnHistRef.current = mkHist({ priceScaleId: "left", base: 0, color: "#3b82f6", priceLineVisible: false });
-
-      // tooltip
-      const tip = document.createElement("div");
-      tip.style.position = "absolute";
-      tip.style.pointerEvents = "none";
-      tip.style.zIndex = "10";
-      tip.style.padding = "6px 8px";
-      tip.style.borderRadius = "8px";
-      tip.style.fontSize = "12px";
-      tip.style.background = "#fff";
-      tip.style.border = "1px solid #e5e7eb";
-      tip.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)";
-      tip.style.display = "none";
-      wrapRef.current?.appendChild(tip);
-      tooltipRef.current = tip;
-
-      const onMove = (param: any) => {
-        if (!tooltipRef.current) return;
-        const t = tooltipRef.current;
-        if (!param.point || !param.time) { t.style.display = "none"; return; }
-
-        const baseP = param.seriesData.get(seriesRef.current);
-        const ampP  = ampSeriesRef.current ? param.seriesData.get(ampSeriesRef.current) : undefined;
-        const rocP  = rocSeriesRef.current ? param.seriesData.get(rocSeriesRef.current) : undefined;
-        if (!baseP || baseP.value === undefined) { t.style.display = "none"; return; }
-
-        const timeLabel = typeof param.time === "number" ? hms(param.time as number) : String(param.time);
-        const baseRow = `<div>value: <b>${Number(baseP.value).toFixed(4)}</b></div>`;
-        const ampRow  = ampP && ampP.value !== undefined ? `<div>amplitude: <b>${Number(ampP.value).toFixed(4)}</b></div>` : "";
-        const rocRow  = rocP && rocP.value !== undefined ? `<div>rate: <b>${Number(rocP.value).toFixed(4)}</b> /s</div>` : "";
-
-        t.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${timeLabel}</div>${baseRow}${ampRow}${rocRow}`;
-        t.style.left = `${param.point.x + 12}px`;
-        t.style.top  = `${param.point.y + 12}px`;
-        t.style.display = "block";
+      const baseLineOptions: LineSeriesPartialOptions = {
+        lineWidth: 2,
+        priceLineVisible: false,
       };
+      seriesRef.current = chart.addLineSeries(baseLineOptions);
+      ampSeriesRef.current = chart.addLineSeries({
+        ...baseLineOptions,
+        color: "#10b981",
+      });
+      rocSeriesRef.current = chart.addLineSeries({
+        ...baseLineOptions,
+        color: "#f59e0b",
+      });
+
+      const tooltip = document.createElement("div");
+      tooltip.style.position = "absolute";
+      tooltip.style.pointerEvents = "none";
+      tooltip.style.zIndex = "10";
+      tooltip.style.padding = "6px 8px";
+      tooltip.style.borderRadius = "8px";
+      tooltip.style.fontSize = "12px";
+      tooltip.style.background = "#fff";
+      tooltip.style.border = "1px solid #e5e7eb";
+      tooltip.style.boxShadow = "0 4px 12px rgba(0,0,0,0.12)";
+      tooltip.style.display = "none";
+      wrapRef.current?.appendChild(tooltip);
+      tooltipRef.current = tooltip;
+
+      const getPointValue = (point?: SeriesDataItemTypeMap["Line"]) =>
+        point && "value" in point && typeof point.value === "number"
+          ? point.value
+          : undefined;
+
+      const onMove = (param: MouseEventParams<Time>) => {
+        const tooltipEl = tooltipRef.current;
+        const baseSeries = seriesRef.current;
+        if (!tooltipEl || !baseSeries) return;
+        if (!param.point || !param.time) {
+          tooltipEl.style.display = "none";
+          return;
+        }
+
+        const basePoint = param.seriesData.get(baseSeries);
+        if (!basePoint) {
+          tooltipEl.style.display = "none";
+          return;
+        }
+
+        const ampSeries = ampSeriesRef.current;
+        const rocSeries = rocSeriesRef.current;
+
+        const baseValue = getPointValue(basePoint);
+        if (baseValue === undefined) {
+          tooltipEl.style.display = "none";
+          return;
+        }
+
+        const ampValue = ampSeries ? getPointValue(param.seriesData.get(ampSeries)) : undefined;
+        const rocValue = rocSeries ? getPointValue(param.seriesData.get(rocSeries)) : undefined;
+
+        const timeLabel =
+          typeof param.time === "number"
+            ? hms(param.time)
+            : String(param.time);
+
+        const ampRow =
+          ampValue !== undefined
+            ? `<div>amplitude: <b>${ampValue.toFixed(4)}</b></div>`
+            : "";
+        const rocRow =
+          rocValue !== undefined
+            ? `<div>rate: <b>${rocValue.toFixed(4)}</b> /s</div>`
+            : "";
+
+        tooltipEl.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${timeLabel}</div><div>value: <b>${baseValue.toFixed(4)}</b></div>${ampRow}${rocRow}`;
+        tooltipEl.style.left = `${param.point.x + 12}px`;
+        tooltipEl.style.top = `${param.point.y + 12}px`;
+        tooltipEl.style.display = "block";
+      };
+
       chart.subscribeCrosshairMove(onMove);
 
-      const ro = new ResizeObserver(() => {
+      const resizeObserver = new ResizeObserver(() => {
         const { width, height: h } = el.getBoundingClientRect();
-        chart.applyOptions({ width: Math.max(200, Math.floor(width)), height: Math.max(200, Math.floor(h)) });
+        chart.applyOptions({
+          width: Math.max(200, Math.floor(width)),
+          height: Math.max(200, Math.floor(h)),
+        });
       });
-      ro.observe(el);
+      resizeObserver.observe(el);
 
       cleanup = () => {
         chart.unsubscribeCrosshairMove(onMove);
-        ro.disconnect();
-        tip.remove();
+        resizeObserver.disconnect();
+        tooltip.remove();
         chart.remove();
-        seriesRef.current = ampSeriesRef.current = rocSeriesRef.current = null;
-        spikeUpHistRef.current = spikeDnHistRef.current = null;
-        chartRef.current = tooltipRef.current = null;
+        seriesRef.current = null;
+        ampSeriesRef.current = null;
+        rocSeriesRef.current = null;
+        chartRef.current = null;
+        tooltipRef.current = null;
       };
     })();
-    return () => cleanup();
-  }, []);
+
+    return () => {
+      disposed = true;
+      cleanup?.();
+    };
+  }, [height]);
 
   useEffect(() => { if (chartRef.current) chartRef.current.applyOptions({ height }); }, [height]);
 
@@ -243,29 +343,33 @@ export default function RealTimeChart({
     // backfill from REST
     const backfill = async () => {
       try {
-        const res = await fetch(`/api/mushroom/${encodeURIComponent(String(mushId))}?limit=${backfillLimit}`, { cache: "no-store" });
+        const res = await fetch(
+          `/api/mushroom/${encodeURIComponent(String(mushId))}?limit=${backfillLimit}`,
+          { cache: "no-store" }
+        );
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        // accept shapes: {signals:[{timestamp,signal}]}, {points:[{time,value}]}, rows/array
-        const rows: any[] = Array.isArray(json?.signals)
-          ? json.signals
-          : Array.isArray(json?.points)
-          ? json.points
-          : Array.isArray(json?.rows)
-          ? json.rows
-          : Array.isArray(json)
-          ? json
-          : [];
-        const seed: Point[] = rows
-          .map((r: any) => ({
-            time: toTime(r.t ?? r.time ?? r.timestamp ?? r.Timestamp?.value ?? r.Timestamp),
-            value: Number(r.v ?? r.value ?? r.signal ?? r.Signal_mV),
-          }))
-          .filter((p: Point) => Number.isFinite(p.value))
+        const json = (await res.json()) as unknown;
+
+        let rows: unknown[] = [];
+        if (isRecord(json)) {
+          for (const key of ["signals", "points", "rows"] as const) {
+            const candidate = json[key];
+            if (Array.isArray(candidate)) {
+              rows = candidate;
+              break;
+            }
+          }
+        } else if (Array.isArray(json)) {
+          rows = json;
+        }
+
+        const seed = rows
+          .map(mapRawPoint)
+          .filter((p): p is Point => Boolean(p))
           .sort((a, b) => Number(a.time) - Number(b.time))
           .slice(-maxPoints);
         if (!cancelled) setPoints(seed);
-      } catch (e) {
+      } catch (error) {
         if (!cancelled) setPoints([]); // still allow live stream
       }
     };
@@ -278,27 +382,31 @@ export default function RealTimeChart({
 
       es.onmessage = (ev) => {
         try {
-          const { t, v } = JSON.parse(ev.data) as RTPoint;
-          const p: Point = { time: toTime(t), value: Number(v) };
-          // append + ring buffer
+          const parsed = JSON.parse(ev.data) as unknown;
+          const point = mapRawPoint(parsed);
+          if (!point) return;
           setPoints((prev) => {
-            const arr = prev.concat(p);
-            return arr.length > maxPoints ? arr.slice(arr.length - maxPoints) : arr;
+            const next = prev.concat(point);
+            return next.length > maxPoints ? next.slice(next.length - maxPoints) : next;
           });
         } catch {
-          /* ignore bad packet */
+          /* ignore malformed packet */
         }
       };
 
       es.addEventListener("snapshot", (ev) => {
         try {
-          const arr = JSON.parse((ev as MessageEvent).data) as RTPoint[];
-          const seed = arr
-            .map((q) => ({ time: toTime(q.t), value: Number(q.v) }))
+          const parsed = JSON.parse((ev as MessageEvent).data) as unknown;
+          if (!Array.isArray(parsed)) return;
+          const seed = parsed
+            .map(mapRawPoint)
+            .filter((p): p is Point => Boolean(p))
             .sort((a, b) => Number(a.time) - Number(b.time))
             .slice(-maxPoints);
           setPoints(seed);
-        } catch {}
+        } catch {
+          /* ignore snapshot parse errors */
+        }
       });
     };
 

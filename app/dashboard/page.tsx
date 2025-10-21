@@ -2,11 +2,14 @@
 import { useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type QueryRow = Record<string, unknown>;
+
 export default function Page() {
-    const [rows, setRows] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
-    const headers = Object.keys(rows[0] ??{});
-    const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<QueryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const headers = Object.keys(rows[0] ?? {});
 
 
   useEffect(() => {
@@ -15,12 +18,17 @@ export default function Page() {
         // If your API file is app/api/data/route.ts, change to "/api/data"
         const res = await fetch("/api/query", { cache: "no-store" });
         if (!res.ok) throw new Error(`API ${res.status} ${res.statusText}`);
-        const data = await res.json();
+        const data = (await res.json()) as unknown;
         if (!Array.isArray(data)) throw new Error("API did not return an array");
-        setRows(data);
-      } catch (e: any) {
+        const mapped = data.filter(
+          (row): row is QueryRow =>
+            row != null && typeof row === "object" && !Array.isArray(row)
+        );
+        setRows(mapped);
+      } catch (e: unknown) {
         console.error(e);
-        setError(e?.message ?? "Failed to fetch data");
+        const message = e instanceof Error ? e.message : "Failed to fetch data";
+        setError(message);
       } finally {
         setLoading(false);
       }

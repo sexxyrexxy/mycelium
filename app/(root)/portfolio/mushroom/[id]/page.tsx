@@ -8,11 +8,9 @@ import SignalRiverTab from "./tabs/river";
 import MushroomNetwork from "./tabs/network";
 import MushroomCaveVisualization from "./tabs/cavern";
 import { Analysis } from "./tabs/analysis";
-import { useParams } from "next/navigation";
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("overview");
-  const { id } = useParams<{ id: string }>();
 
   const triggerBaseClass =
     "flex basis-[72px] flex-shrink-0 flex-col items-center gap-1 rounded-lg px-3 py-2 text-xs transition sm:flex-1 sm:basis-auto sm:flex-row sm:items-center sm:justify-center sm:gap-2 sm:text-sm";

@@ -9,10 +9,28 @@ function requireBaseUrl() {
 
 // POST body: { audioId, model, continueAt, prompt, style, title, defaultParamFlag? }
 // Model **must** match the original track's model (e.g., V4_5 if that created the base).
+type ExtendRequestBody = {
+  audioId?: string;
+  model?: string;
+  continueAt?: number;
+  prompt?: string;
+  style?: string;
+  title?: string;
+  defaultParamFlag?: boolean;
+};
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { audioId, model, continueAt, prompt, style, title, defaultParamFlag = true } = body || {};
+    const body = (await req.json()) as ExtendRequestBody | null;
+    const {
+      audioId,
+      model,
+      continueAt,
+      prompt,
+      style,
+      title,
+      defaultParamFlag = true,
+    } = body ?? {};
     if (!audioId || !model || (typeof continueAt !== "number")) {
       return NextResponse.json({ error: "audioId, model, continueAt are required" }, { status: 400 });
     }
@@ -38,12 +56,24 @@ export async function POST(req: Request) {
     });
 
     const raw = await upstream.text();
-    let json: any = null; try { json = raw ? JSON.parse(raw) : null; } catch {}
-    if (!upstream.ok || !json || json?.code !== 200) {
+    let parsed: unknown = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    const json = parsed as {
+      code?: number;
+      data?: { taskId?: string };
+      msg?: string;
+    } | null;
+
+    if (!upstream.ok || !json || json.code !== 200 || !json.data?.taskId) {
       return NextResponse.json({ error: json?.msg ?? `extend failed (${upstream.status})`, raw: raw?.slice(0,500) }, { status: 502 });
     }
     return NextResponse.json({ taskId: json.data.taskId });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Internal error" }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

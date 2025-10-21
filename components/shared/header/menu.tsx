@@ -4,15 +4,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Menu as MenuIcon, X } from "lucide-react";
-import { Kavoon } from "next/font/google";
 import { auth } from "../../../config/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-
-const kavoon = Kavoon({ subsets: ["latin"], weight: "400" });
+import type { User } from "firebase/auth";
 
 const Menu = () => {
   const [isOpen, setIsOpen] = useState(false); // Variable to set and change whether hamburger menu is toggled.
-  const [user, setUser] = useState(null); // Variable to set and change user state.
+  const [user, setUser] = useState<User | null>(null); // Variable to set and change user state.
   const [userDropdownOpen, setUserDropdownOpen] = useState(false); // Variable to toggle user dropdown
 
   useEffect(() => {

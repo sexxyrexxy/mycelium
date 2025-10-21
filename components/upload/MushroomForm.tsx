@@ -14,16 +14,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+type FormState = {
+  name: string;
+  description: string;
+  mushroomKind: string;
+  csvFile: File | null;
+};
+
 export default function MushroomForm() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     name: "",
     description: "",
     mushroomKind: "",
-    csvFile: null as File | null,
+    csvFile: null,
   });
 
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<unknown>(null);
 
   const handleCSVChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -56,17 +63,19 @@ export default function MushroomForm() {
         body,
       });
 
-      const json = await res.json();
+      const json = (await res.json()) as Record<string, unknown> | null;
       setResult(json);
 
       if (!res.ok) {
-        alert("Upload failed: " + json.error);
+        const message = typeof json?.error === "string" ? json.error : "Unknown error";
+        alert("Upload failed: " + message);
       } else {
         alert("Mushroom uploaded successfully!");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert("Unexpected error: " + err.message);
+      const message = err instanceof Error ? err.message : "Unexpected error";
+      alert("Unexpected error: " + message);
     } finally {
       setLoading(false);
     }
@@ -109,6 +118,7 @@ export default function MushroomForm() {
           <div className="flex flex-col space-y-2">
             <Label htmlFor="mushroomKind">Mushroom Kind</Label>
             <Select
+              value={formData.mushroomKind}
               onValueChange={(value) =>
                 setFormData({ ...formData, mushroomKind: value })
               }

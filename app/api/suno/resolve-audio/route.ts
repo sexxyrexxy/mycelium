@@ -2,6 +2,27 @@
 import { NextResponse } from "next/server";
 import { SUNO_BASE, authHeaders } from "@/lib/suno";
 
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function firstRecordFromArray(value: unknown): JsonRecord | null {
+  if (Array.isArray(value) && value.length > 0 && asRecord(value[0])) {
+    return value[0];
+  }
+  return null;
+}
+
+function coerceString(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
+}
+
 /**
  * Resolve a usable {id, model, audioUrl, streamAudioUrl} for a given taskId.
  * This wraps Suno's status/get-like responses and normalizes common shapes.
@@ -19,42 +40,88 @@ export async function GET(req: Request) {
     cache: "no-store",
   });
 
-  const json = await res.json();
+  const parsed = (await res.json()) as unknown;
+  const errorMessage =
+    (asRecord(parsed) && typeof parsed.msg === "string" ? parsed.msg : null) ??
+    "Suno status error";
   if (!res.ok) {
-    return NextResponse.json({ error: json?.msg ?? "Suno status error" }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 
   // Normalize several common shapes
-  const candidates: any[] = [];
-  const pushIf = (v: any) => { if (v) candidates.push(v); };
+  const candidates: JsonRecord[] = [];
+  const rootRecord = asRecord(parsed) ? parsed : null;
 
-  pushIf(json?.response?.sunoData?.[0]);
-  pushIf(json?.response?.data?.[0]);
-  pushIf(json?.data?.[0]);
-  if (json?.response && typeof json.response === "object" && !Array.isArray(json.response)) {
-    pushIf(json.response);
+  if (rootRecord) {
+    const response = rootRecord.response;
+    if (response) {
+      const responseRecord = asRecord(response) ? response : null;
+      if (responseRecord) {
+        const sunoDataCandidate = firstRecordFromArray(responseRecord.sunoData);
+        if (sunoDataCandidate) candidates.push(sunoDataCandidate);
+        const responseDataCandidate = firstRecordFromArray(responseRecord.data);
+        if (responseDataCandidate) candidates.push(responseDataCandidate);
+        candidates.push(responseRecord);
+      }
+    }
+
+    const dataCandidate = firstRecordFromArray(rootRecord.data);
+    if (dataCandidate) candidates.push(dataCandidate);
   }
-  if (Array.isArray(json)) pushIf(json[0]);
 
-  let picked: any | null = null;
-  for (const raw of candidates) {
-    if (!raw) continue;
-    const id = raw.id ?? raw.audioId ?? raw.songId ?? raw.trackId ?? raw.clipId;
-    if (id) { picked = raw; break; }
+  const rootArrayCandidate = firstRecordFromArray(parsed);
+  if (rootArrayCandidate) candidates.push(rootArrayCandidate);
+
+  let picked: JsonRecord | null = null;
+  for (const candidate of candidates) {
+    const id =
+      candidate.id ??
+      candidate.audioId ??
+      candidate.songId ??
+      candidate.trackId ??
+      candidate.clipId;
+    if (id != null) {
+      picked = candidate;
+      break;
+    }
   }
 
   if (!picked) {
-    return NextResponse.json({ error: "No track found in status payload", raw: json }, { status: 404 });
+    return NextResponse.json(
+      { error: "No track found in status payload", raw: parsed },
+      { status: 404 }
+    );
   }
 
   const normalized = {
-    id: String(picked.id ?? picked.audioId ?? picked.songId ?? picked.trackId ?? picked.clipId),
-    model: picked.model ?? picked.modelName ?? picked.engine ?? picked.version ?? null,
-    audioUrl: picked.audioUrl ?? picked.audio_url ?? picked.mp3Url ?? picked.url ?? null,
-    streamAudioUrl: picked.streamAudioUrl ?? picked.stream_url ?? picked.streamUrl ?? null,
-    title: picked.title ?? null,
-    duration: picked.duration ?? null,
-    raw: json,
+    id:
+      coerceString(
+        picked.id ??
+          picked.audioId ??
+          picked.songId ??
+          picked.trackId ??
+          picked.clipId
+      ) ?? "",
+    model:
+      coerceString(
+        picked.model ?? picked.modelName ?? picked.engine ?? picked.version
+      ) ?? null,
+    audioUrl:
+      coerceString(
+        picked.audioUrl ?? picked.audio_url ?? picked.mp3Url ?? picked.url
+      ) ?? null,
+    streamAudioUrl:
+      coerceString(
+        picked.streamAudioUrl ??
+          picked.stream_url ??
+          picked.streamUrl
+      ) ?? null,
+    title: coerceString(picked.title) ?? null,
+    duration:
+      typeof picked.duration === "number"
+        ? picked.duration
+        : coerceString(picked.duration),
+    raw: parsed,
   };
 
   return NextResponse.json(normalized);

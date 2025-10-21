@@ -21,16 +21,21 @@ export async function uploadFileToSuno(
   );
 
   const raw = await response.text();
-  let json: any = null;
+  let parsed: unknown = null;
   try {
-    json = raw ? JSON.parse(raw) : null;
+    parsed = raw ? JSON.parse(raw) : null;
   } catch {
-    json = null;
+    parsed = null;
   }
+
+  const json = parsed as {
+    data?: { downloadUrl?: string };
+    msg?: string;
+  } | null;
 
   if (!response.ok || !json?.data?.downloadUrl) {
     throw new Error(json?.msg ?? `File upload failed (${response.status})`);
   }
 
-  return json.data.downloadUrl as string;
+  return json.data.downloadUrl;
 }

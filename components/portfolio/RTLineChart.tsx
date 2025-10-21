@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import type { TooltipProps } from "recharts";
+import type {
+  NameType,
+  ValueType,
+} from "recharts/types/component/DefaultTooltipContent";
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
@@ -184,11 +189,6 @@ export function RTLineChart({ mushId = "" }: { mushId?: string }) {
   const avg = stats.average;
   const total = stats.total != null ? Math.round(stats.total) : null;
 
-  const rangeLabel = useMemo(
-    () => options.find((opt) => opt.id === selectedRange)?.label ?? "",
-    [options, selectedRange]
-  );
-
   const isInitialLoading =
     selectedRange === "rt"
       ? loading && rtSeries.length === 0
@@ -198,24 +198,6 @@ export function RTLineChart({ mushId = "" }: { mushId?: string }) {
     selectedRange === "rt"
       ? !loading && !error && rtSeries.length === 0
       : !loading && !error && standardChartData.length === 0;
-
-  const formatAxisTick = (value: string) => formatTickForRange(selectedRange, value);
-  const formatTooltipLabel = (value: string) => formatTooltipForRange(selectedRange, value);
-
-  const latestPoint = chartData.at(-1) ?? null;
-  const firstPoint = chartData[0] ?? null;
-  const highPoint = chartData.length
-    ? chartData.reduce((acc, p) => (p.signal > acc.signal ? p : acc), chartData[0])
-    : null;
-  const lowPoint = chartData.length
-    ? chartData.reduce((acc, p) => (p.signal < acc.signal ? p : acc), chartData[0])
-    : null;
-  const changeValue =
-    latestPoint && firstPoint ? latestPoint.signal - firstPoint.signal : null;
-  const changePct =
-    changeValue != null && firstPoint && firstPoint.signal !== 0
-      ? (changeValue / Math.abs(firstPoint.signal)) * 100
-      : null;
 
   /**
    * ================================
@@ -230,7 +212,11 @@ export function RTLineChart({ mushId = "" }: { mushId?: string }) {
     return { title: "Stable Activity 🧘", text: "Conditions look balanced", tone: "text-amber-600" };
   };
 
-  function CustomTooltip({ active, payload, label }: any) {
+  function CustomTooltip({
+    active,
+    payload,
+    label,
+  }: TooltipProps<ValueType, NameType>) {
     if (!active || !payload || !payload.length) return null;
     const v = typeof payload[0]?.value === "number" ? (payload[0].value as number) : null;
     const info = interpret(v, avg);

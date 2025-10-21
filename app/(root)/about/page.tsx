@@ -21,11 +21,11 @@ const AboutUs: React.FC = () => {
             <h1
               className={`font-bold text-4xl md:text-4xl ${kavoon.className} drop-shadow-[2px_2px_4px_rgba(0,0,0,0.6)]`}
             >
-              Myco Lab's mission to save mushrooms
+              Myco Lab&apos;s mission to save mushrooms
             </h1>
             <br />
             <p className="text-lg md:text-xl leading-relaxed max-w-3xl mx-auto">
-              Myco Lab's mission is to protect and celebrate mushrooms by
+              Myco Lab&apos;s mission is to protect and celebrate mushrooms by
               shining a light on the vibrant mycelium networks that sustain
               them. We raise awareness of this hidden life while supporting
               mushroom growers and enthusiasts on their journeys with knowledge,

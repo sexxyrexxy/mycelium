@@ -52,9 +52,6 @@ const MushroomNetwork: React.FC = () =>  {
         return;
       }
 
-      // Example: 1000 elements, ~20% chance of spike
-const testSpikes: number[] = Array.from({ length: 1000 }, () => (Math.random() < 0.2 ? 1 : 0));
-
       cleanup = drawVoronoiChart(
         svgRef.current!,
         800,

@@ -1,7 +1,7 @@
 // components/Chart.tsx
 "use client";
 import React, { useRef, useEffect } from "react";
-import { createChart, AreaSeries, ColorType } from "lightweight-charts";
+import { createChart, ColorType } from "lightweight-charts";
 
 interface ChartProps {
   data: { time: string; value: number }[];
@@ -9,7 +9,6 @@ interface ChartProps {
 
 export const Chart: React.FC<ChartProps> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<any>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -25,19 +24,26 @@ export const Chart: React.FC<ChartProps> = ({ data }) => {
     });
     chartRef.current = chart;
 
-    const areaSeries = chart.addSeries(AreaSeries, {
+    const areaSeries = chart.addAreaSeries({
       lineColor: "#22c55e",
       topColor: "rgba(34,197,94,0.3)",
       bottomColor: "rgba(34,197,94,0.05)",
     });
+    areaSeriesRef.current = areaSeries;
     areaSeries.setData(data);
 
-    window.addEventListener("resize", () => {
-      chart.applyOptions({ width: containerRef.current!.clientWidth });
-    });
+    const handleResize = () => {
+      const width = containerRef.current?.clientWidth;
+      if (!width) return;
+      chart.applyOptions({ width });
+    };
+    window.addEventListener("resize", handleResize);
 
     return () => {
+      window.removeEventListener("resize", handleResize);
       chart.remove();
+      chartRef.current = null;
+      areaSeriesRef.current = null;
     };
   }, [data]);
 

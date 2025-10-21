@@ -28,6 +28,11 @@ import {
   ChartConfig,
 } from "@/components/ui/chart";
 
+type Signal = {
+  timestamp: string;
+  signal: number | null;
+};
+
 export const description = "Timeline analysis of differential voltage feed with network diagram.";
 
 export function Analysis() {
@@ -184,7 +189,6 @@ export function Analysis() {
   const [workerError, setWorkerError] = useState<string | null>(null);
 
   const combinedError = error || workerError;
-  const isLoading = loading || workerLoading;
 
   const chartConfig = {
     signal: {
@@ -537,7 +541,7 @@ export function Analysis() {
       <span className="text-xs">
         The background color shows the mushroom’s baseline electrical signals, calculated as a moving average. 
         A cooler tone background indicates lower average activity, while warmer indicates higher average activity, 
-        highlighting increased electrical activity and overall 'excitability' in the mushroom.
+        highlighting increased electrical activity and overall &ldquo;excitability&rdquo; in the mushroom.
       </span>
     </li>
     <li className="flex flex-col gap-1 p-2 rounded-md">

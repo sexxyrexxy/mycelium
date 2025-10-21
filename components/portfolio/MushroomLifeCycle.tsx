@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 export type MushroomStage =
   | "RAIN"
@@ -48,7 +48,6 @@ export default function MushroomLifeCycle({
   }, []);
 
   // easing helpers
-  const clamp01 = (x:number)=> Math.max(0, Math.min(1, x));
   const ease = (x:number)=> x<0?0:x>1?1:x*x*(3-2*x);
 
   // normalized progress 0..1 within current stage (for subtle transitions)
@@ -71,7 +70,6 @@ export default function MushroomLifeCycle({
   const vb=100;
 
   // growth amounts
-  const sproutH = 8 + 18*k;            // stem grow during SPROUT
   const bloomPulse = 1 + (currentStage==="BLOOM" ? 0.02*Math.sin(t/8) : 0);
   const wiltTilt = currentStage==="WILT" ? ( -8 * k ) : 0; // droop degrees
   const yBob = (currentStage==="BLOOM"||currentStage==="SPORE") ? Math.sin(t/20)*0.8 : 0;
@@ -97,7 +95,6 @@ export default function MushroomLifeCycle({
       const R = 8 + (i%6)*3 + (currentStage==="SPORE"? k*14 : 0);
       return { x: 50+Math.cos(a)*R, y: 52+Math.sin(a)*R, r: 0.8 + (i%3)*0.3 };
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStage, t, k]);
 
   // rain lines

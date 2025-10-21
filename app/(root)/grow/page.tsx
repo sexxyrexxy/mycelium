@@ -119,9 +119,11 @@ export default function Homepage() {
               className="flex-grow px-4 py-2 outline-none text-black"
             />
             <button className="px-4 bg-white flex items-center justify-center">
-              <img
+              <Image
                 src="/images/search.png"
                 alt="Search"
+                width={44}
+                height={44}
                 className="w-11 h-11"
               />
             </button>

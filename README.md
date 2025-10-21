@@ -63,9 +63,16 @@ npm run build
 
 ## Environment & Credentials
 
-- BigQuery credentials **are not bundled with the repository**. Provide your own service-account JSON following the schema used in `app/api/mushroom/[id]/route.ts`.
-- Set the relevant environment variables or place the JSON key in the project root (the code references `mycelium-470904-5621723dfeff.json` by default).
-- Upload routes expect the `MushroomData.Mushroom_Signal` and `MushroomData.Mushroom_Details` tables to exist with the column layouts documented inside `app/api/mushrooms/route.ts`.
+All secrets now live in `.env.local` (see the committed template). The key variables are:
+
+- **Firebase** – `NEXT_PUBLIC_FIREBASE_*` (used by the client bundle).
+- **Suno** – `SUNO_API_KEY` and `SUNO_BASE`.
+- **Google Cloud** – project/dataset tables (`GCP_PROJECT_ID`, `BIGQUERY_*`), Pub/Sub (`GCP_PUBSUB_*`), and service-account credentials.
+
+For local development you can point `GOOGLE_APPLICATION_CREDENTIALS_FILE` at a JSON key in the repo root.  
+For production/Vercel, paste the raw JSON into `GOOGLE_APPLICATION_CREDENTIALS_JSON` (or provide a base64 string via `GOOGLE_APPLICATION_CREDENTIALS_JSON_BASE64`) and delete the local file from source control.
+
+Upload routes expect the datasets/tables referenced by the env vars to exist; adjust them if your schema differs from the defaults noted above.
 
 ---
 

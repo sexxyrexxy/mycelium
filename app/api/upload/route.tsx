@@ -94,26 +94,19 @@
 
 // app/api/mushroom/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { BigQuery } from "@google-cloud/bigquery";
+import type { TableSchema } from "@google-cloud/bigquery";
 import os from "os";
 import path from "path";
 import fs from "fs/promises";
+import { getBigQueryClient, googleConfig } from "@/lib/googleCloud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// ---- CONFIG ----
-const PROJECT_ID = "mycelium-470904";
-const DATASET_ID = "MushroomData1";            // <- adjust if yours differs
-const DETAILS_TABLE = "Mushroom_Details";      // columns: MushID STRING, UserID STRING, ImageUrl STRING, Name STRING, Mushroom_Kind STRING, Description STRING, CreatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
-const SIGNALS_TABLE = "MushroomSignals";       // columns: MushID STRING, Timestamp TIMESTAMP, Signal_mV FLOAT64
-const LOCATION = "US";
-const KEY_FILE = "mycelium-470904-5621723dfeff.json";
-
 // CSV expected columns (header row): Timestamp,Signal_mV
 // If your CSV uses different names, update STAGING_SCHEMA and the INSERT SELECT below.
 
-const STAGING_SCHEMA = {
+const STAGING_SCHEMA: TableSchema = {
   fields: [
     { name: "Timestamp", type: "TIMESTAMP" },
     { name: "Signal_mV", type: "FLOAT" }, // FLOAT == FLOAT64 in BigQuery API
@@ -123,13 +116,17 @@ const STAGING_SCHEMA = {
 export async function POST(req: NextRequest) {
   let tmpPath: string | null = null;
   let stagingId: string | null = null;
+  const bq = getBigQueryClient();
+  const datasetPath = `${googleConfig.projectId}.${googleConfig.uploadDatasetId}`;
 
   try {
     // ---- 1) Read multipart form data ----
     const form = await req.formData();
 
-    const file = form.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    const file = form.get("file");
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
 
     const name = (form.get("name") ?? "").toString().trim();
     const description = (form.get("description") ?? "").toString().trim();
@@ -147,19 +144,12 @@ export async function POST(req: NextRequest) {
     const buf = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(tmpPath, buf);
 
-    // ---- 3) BigQuery client ----
-    const bq = new BigQuery({
-      projectId: PROJECT_ID,
-      keyFilename: KEY_FILE,
-      location: LOCATION,
-    });
-
     // ---- 4) Insert details row and get mushId (UUID) ----
     const detailsScript = `
       DECLARE new_id STRING;
       SET new_id = GENERATE_UUID();
 
-      INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.${DETAILS_TABLE}\`
+      INSERT INTO \`${datasetPath}.${googleConfig.detailsTable}\`
         (MushID, UserID, ImageUrl, Name, Mushroom_Kind, Description)
       VALUES
         (new_id, @userId, '', @name, @kind, @description);
@@ -167,13 +157,13 @@ export async function POST(req: NextRequest) {
       SELECT new_id AS mushid;
     `;
 
-    const [detailRows] = await bq.query({
+    const [detailRows] = await bq.query<{ mushid: string }>({
       query: detailsScript,
-      location: LOCATION,
+      location: googleConfig.uploadLocation,
       params: { userId, name, kind, description },
     });
 
-    const mushId = (detailRows?.[0] as any)?.mushid as string | undefined;
+    const mushId = detailRows?.[0]?.mushid;
     if (!mushId) {
       throw new Error("Failed to obtain MushID");
     }
@@ -183,35 +173,27 @@ export async function POST(req: NextRequest) {
 
     // Ensure no leftover table with the same name (very unlikely)
     try {
-      await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true });
+      await bq
+        .dataset(googleConfig.uploadDatasetId)
+        .table(stagingId)
+        .delete({ ignoreNotFound: true });
     } catch {}
 
     // ---- 6) Load CSV into the staging table ----
     const [loadJob] = await bq
-      .dataset(DATASET_ID)
+      .dataset(googleConfig.uploadDatasetId)
       .table(stagingId)
       .load(tmpPath, {
-        schema: STAGING_SCHEMA as any,
+        schema: STAGING_SCHEMA,
         sourceFormat: "CSV",
         skipLeadingRows: 1,          // CSV has header row
         writeDisposition: "WRITE_TRUNCATE",
       });
 
-    // Pull jobId/location from the response, then re-create a Job instance
-    const jr = (loadJob as any)?.jobReference;
-    const cleanJobId =
-      jr?.jobId ??
-      (typeof (loadJob as any)?.id === "string"
-        ? (loadJob as any).id.split(".").pop()
-        : undefined);
-
-    if (!cleanJobId) throw new Error("Could not determine load jobId");
-
-    const JobLike = bq.job(cleanJobId, { location: jr?.location || LOCATION });
-    await JobLike.promise(); // wait for completion
+    await loadJob.promise(); // wait for completion
 
     // Make sure the job completed without errors
-    const [loadMeta] = await JobLike.getMetadata();
+    const [loadMeta] = await loadJob.getMetadata();
     if (loadMeta.status?.errorResult) {
       throw new Error(`Load error: ${loadMeta.status.errorResult.message}`);
     }
@@ -219,27 +201,30 @@ export async function POST(req: NextRequest) {
     // ---- 7) Fan rows into the main signals table with constant mushId ----
     // NOTE: Column names must match your SIGNALS table: MushID, Timestamp, Signal_mV
     const insertSignals = `
-      INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.${SIGNALS_TABLE}\` (MushID, Timestamp, Signal_mV)
+      INSERT INTO \`${googleConfig.projectId}.${googleConfig.uploadDatasetId}.${googleConfig.uploadSignalsTable}\` (MushID, Timestamp, Signal_mV)
       SELECT @mushId AS MushID, Timestamp, Signal_mV
-      FROM \`${PROJECT_ID}.${DATASET_ID}.${stagingId}\`
+      FROM \`${datasetPath}.${stagingId}\`
     `;
     const [insertJob] = await bq.createQueryJob({
       query: insertSignals,
-      location: LOCATION,
+      location: googleConfig.uploadLocation,
       params: { mushId },
     });
     await insertJob.getQueryResults(); // wait for completion
 
     // Optionally get row count inserted
     // (BigQuery doesn't directly return affected rows here; we can compute from staging)
-    const [countRows] = await bq.query({
-      query: `SELECT COUNT(*) AS cnt FROM \`${PROJECT_ID}.${DATASET_ID}.${stagingId}\``,
-      location: LOCATION,
+    const [countRows] = await bq.query<{ cnt: string | number }>({
+      query: `SELECT COUNT(*) AS cnt FROM \`${datasetPath}.${stagingId}\``,
+      location: googleConfig.uploadLocation,
     });
-    const outputRows = Number((countRows?.[0] as any)?.cnt ?? 0);
+    const outputRows = Number(countRows?.[0]?.cnt ?? 0);
 
     // ---- 8) Cleanup: drop staging table ----
-    await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true });
+    await bq
+      .dataset(googleConfig.uploadDatasetId)
+      .table(stagingId)
+      .delete({ ignoreNotFound: true });
     stagingId = null;
 
     // ---- 9) Cleanup: delete temp file ----
@@ -252,18 +237,21 @@ export async function POST(req: NextRequest) {
       mushId,
       insertedSignals: outputRows,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Best-effort cleanup
     try {
       if (stagingId) {
-        const bq = new BigQuery({ projectId: PROJECT_ID, keyFilename: KEY_FILE, location: LOCATION });
-        await bq.dataset(DATASET_ID).table(stagingId).delete({ ignoreNotFound: true });
+        await bq
+          .dataset(googleConfig.uploadDatasetId)
+          .table(stagingId)
+          .delete({ ignoreNotFound: true });
       }
     } catch {}
     try {
       if (tmpPath) await fs.unlink(tmpPath);
     } catch {}
 
-    return NextResponse.json({ error: err?.message ?? "Upload failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

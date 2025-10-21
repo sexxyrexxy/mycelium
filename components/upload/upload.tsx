@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch"; // <-- toggle
 
 type UploadPageProps = {
   onClose?: () => void;
-  onUploaded?: (payload: any) => void;
+  onUploaded?: (payload: unknown) => void;
   className?: string;
 };
 
@@ -67,16 +67,21 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
     setError(null);
     try {
       const res = await fetch(endpoint, { method: "POST", body: fd });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? "Upload failed");
+      const json = (await res.json()) as Record<string, unknown> | null;
+      if (!res.ok) {
+        const message =
+          typeof json?.error === "string" ? json.error : "Upload failed";
+        throw new Error(message);
+      }
       setStatus(`Uploaded ${file.name}${realtime ? " (realtime started)" : ""}`);
       onUploaded?.(json);
       setTimeout(() => {
         onClose?.();
         reset();
       }, 1200);
-    } catch (err: any) {
-      setError(err?.message ?? "Upload failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setError(message);
       setBusy(false);
     }
   };

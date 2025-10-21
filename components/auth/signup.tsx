@@ -15,11 +15,22 @@ import {
   browserLocalPersistence,
   onAuthStateChanged,
 } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
+
+type FormState = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  showPassword: boolean;
+  showConfirmPassword: boolean;
+};
 
 const SignUp: React.FC = () => {
   const router = useRouter();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormState>({
     firstName: "",
     lastName: "",
     email: "",
@@ -40,7 +51,10 @@ const SignUp: React.FC = () => {
     return unsub;
   }, [router]);
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = <Key extends keyof FormState>(
+    field: Key,
+    value: FormState[Key]
+  ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -89,16 +103,23 @@ const SignUp: React.FC = () => {
 
       // Redirect to dashboard (or change to "/check-email" if you prefer)
       router.replace("/home");
-    } catch (e: any) {
-      const msg =
-        e?.code === "auth/email-already-in-use"
-          ? "An account with this email already exists."
-          : e?.code === "auth/invalid-email"
-          ? "Please enter a valid email address."
-          : e?.code === "auth/weak-password"
-          ? "Password is too weak."
+    } catch (e: unknown) {
+      const message =
+        e instanceof FirebaseError
+          ? (() => {
+              switch (e.code) {
+                case "auth/email-already-in-use":
+                  return "An account with this email already exists.";
+                case "auth/invalid-email":
+                  return "Please enter a valid email address.";
+                case "auth/weak-password":
+                  return "Password is too weak.";
+                default:
+                  return "Sign up failed. Please try again.";
+              }
+            })()
           : "Sign up failed. Please try again.";
-      setErr(msg);
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -290,7 +311,7 @@ const SignUp: React.FC = () => {
           {/* Additional Information */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              By joining Myco Lab, you're helping protect fungal biodiversity worldwide.
+              By joining Myco Lab, you&apos;re helping protect fungal biodiversity worldwide.
             </p>
           </div>
         </div>
@@ -299,7 +320,7 @@ const SignUp: React.FC = () => {
       {/* Footer Mission Statement */}
       <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-20 text-center py-4 z-0">
         <p className="text-sm text-gray-700">
-          "Shining a light on the vibrant mycelium networks that sustain our world"
+          &ldquo;Shining a light on the vibrant mycelium networks that sustain our world&rdquo;
         </p>
       </div>
     </div>

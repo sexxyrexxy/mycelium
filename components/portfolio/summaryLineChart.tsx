@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis } from "recharts";
+import type { TooltipProps } from "recharts";
+import type {
+  NameType,
+  ValueType,
+} from "recharts/types/component/DefaultTooltipContent";
 import {
   Card,
   CardContent,
@@ -162,14 +167,23 @@ export function ChartLineInteractive({ mushId = "" }: { mushId?: string }) {
   };
 
   // Fully custom tooltip panel (no ChartTooltipContent, so children render correctly)
-  function CustomTooltip({ active, payload, label }: any) {
+  function CustomTooltip({
+    active,
+    payload,
+    label,
+  }: TooltipProps<ValueType, NameType>) {
     if (!active || !payload || !payload.length) return null;
 
-    const point = payload[0];
+    const datum = payload[0];
     const value =
-      typeof point?.value === "number" ? (point.value as number) : null; //extracts signal from a point, if not a number return null
+      typeof datum?.value === "number"
+        ? datum.value
+        : Number.isFinite(Number(datum?.value))
+        ? Number(datum?.value)
+        : null;
     const info = interpret(value, avg);
-    const formattedLabel = label ? formatTooltipForRange(selectedRange, label) : "";
+    const formattedLabel =
+      typeof label === "string" ? formatTooltipForRange(selectedRange, label) : "";
 
     return (
       <div className="rounded-md border bg-background p-2 shadow-sm w-[220px]">

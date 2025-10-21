@@ -12,6 +12,7 @@ import {
   signInWithPopup,
   onAuthStateChanged,
 } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 
 export const Auth = () => {
   const router = useRouter();
@@ -37,14 +38,22 @@ export const Auth = () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       router.replace("/home");
-    } catch (e: any) {
-      const msg =
-        e?.code === "auth/invalid-credential" || e?.code === "auth/wrong-password"
-          ? "Invalid email or password."
-          : e?.code === "auth/user-not-found"
-          ? "No account with that email."
+    } catch (e: unknown) {
+      const message =
+        e instanceof FirebaseError
+          ? (() => {
+              switch (e.code) {
+                case "auth/invalid-credential":
+                case "auth/wrong-password":
+                  return "Invalid email or password.";
+                case "auth/user-not-found":
+                  return "No account with that email.";
+                default:
+                  return "Login failed. Please try again.";
+              }
+            })()
           : "Login failed. Please try again.";
-      setErr(msg);
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -57,8 +66,12 @@ export const Auth = () => {
     try {
       await signInWithPopup(auth, googleProvider);
       router.replace("/home");
-    } catch {
-      setErr("Google sign-in failed. Please try again.");
+    } catch (error: unknown) {
+      const message =
+        error instanceof FirebaseError
+          ? error.message || "Google sign-in failed. Please try again."
+          : "Login failed. Please try again.";
+      setErr(message);
     } finally {
       setBusy(false);
     }
@@ -97,8 +110,12 @@ export const Auth = () => {
                 priority
               />
             </div>
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome back</h1>
-            <p className="text-gray-600">Sign in to continue your fungal journey</p>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              Welcome back
+            </h1>
+            <p className="text-gray-600">
+              Sign in to continue your fungal journey
+            </p>
           </div>
 
           {/* Card */}
@@ -106,7 +123,10 @@ export const Auth = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email */}
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Email address
                 </label>
                 <input
@@ -123,7 +143,10 @@ export const Auth = () => {
 
               {/* Password */}
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                >
                   Password
                 </label>
                 <div className="relative">
@@ -141,9 +164,15 @@ export const Auth = () => {
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -177,7 +206,9 @@ export const Auth = () => {
                     width={20}
                     height={20}
                   />
-                  <span className="text-gray-700 font-medium">Sign in with Google</span>
+                  <span className="text-gray-700 font-medium">
+                    Sign in with Google
+                  </span>
                 </button>
               </div>
             </form>
@@ -186,7 +217,10 @@ export const Auth = () => {
             <div className="mt-6 text-center">
               <p className="text-gray-600">
                 Don&apos;t have an account?{" "}
-                <Link href="/sign-up" className="text-amber-700 hover:text-amber-800 font-medium">
+                <Link
+                  href="/sign-up"
+                  className="text-amber-700 hover:text-amber-800 font-medium"
+                >
                   Sign up here
                 </Link>
               </p>
@@ -196,7 +230,8 @@ export const Auth = () => {
           {/* Footer */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Join our community of mushroom enthusiasts and help protect fungal biodiversity
+              Join our community of mushroom enthusiasts and help protect fungal
+              biodiversity
             </p>
           </div>
         </div>
@@ -205,7 +240,8 @@ export const Auth = () => {
       {/* Bottom strip */}
       <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-20 text-center py-4">
         <p className="text-sm text-gray-700">
-          "Shining a light on the vibrant mycelium networks that sustain our world"
+          Shining a light on the vibrant mycelium networks that sustain our
+          world
         </p>
       </div>
     </div>

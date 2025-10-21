@@ -1,22 +1,16 @@
 // app/api/realtime_upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { BigQuery } from "@google-cloud/bigquery";
-import { PubSub } from "@google-cloud/pubsub"; 
 import os from "os";
 import path from "path";
 import fs from "fs/promises";
+import {
+  getBigQueryClient,
+  getPubSubClient,
+  googleConfig,
+} from "@/lib/googleCloud";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-// ---- CONFIG ----
-const PROJECT_ID = "mycelium-470904";
-const DATASET_ID = "MushroomData";
-const DETAILS_TABLE = "Mushroom_Details";
-const SIGNALS_TABLE = "Mushroom_Signal";
-const LOCATION = "australia-southeast1";
-const KEY_FILE = "mycelium-470904-5621723dfeff.json";
-const PUBSUB_TOPIC = "bigquery-signal-stream"; 
 
 // ---- HELPERS ----
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -47,15 +41,22 @@ export async function POST(req: NextRequest) {
   let tmpPath: string | null = null;
 
   try {
+    const bq = getBigQueryClient();
+    const pubsub = getPubSubClient();
+    const topic = pubsub.topic(googleConfig.pubsubTopic);
+    const datasetPath = `${googleConfig.projectId}.${googleConfig.datasetId}`;
+
     // 1️⃣ Parse form
     const form = await req.formData();
-    const file = form.get("file") as File | null;
+    const file = form.get("file");
     const name = (form.get("name") ?? "").toString().trim();
     const description = (form.get("description") ?? "").toString().trim();
     const kind = (form.get("kind") ?? "").toString().trim();
     const userId = (form.get("userId") ?? "").toString().trim();
 
-    if (!file) return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
     if (!userId || !name || !kind) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -69,33 +70,28 @@ export async function POST(req: NextRequest) {
     const rows = parseCsv(csvContent);
     if (!rows.length) throw new Error("CSV has no data rows");
 
-    // 3️⃣ Init BigQuery + Pub/Sub
-    const bq = new BigQuery({ projectId: PROJECT_ID, keyFilename: KEY_FILE, location: LOCATION });
-    const pubsub = new PubSub({ projectId: PROJECT_ID, keyFilename: KEY_FILE }); 
-    const topic = pubsub.topic(PUBSUB_TOPIC);
-
-    // 4️⃣ Insert details and get MushID
+    // 3️⃣ Insert details and get MushID
     const detailsScript = `
       DECLARE new_id STRING;
       SET new_id = GENERATE_UUID();
 
-      INSERT INTO \`${PROJECT_ID}.${DATASET_ID}.${DETAILS_TABLE}\`
+      INSERT INTO \`${datasetPath}.${googleConfig.detailsTable}\`
         (MushID, UserID, Name, Description, Mushroom_Kind)
       VALUES
         (new_id, @userId, @name, @description, @kind);
 
       SELECT new_id AS mushid;
     `;
-    const [detailRows] = await bq.query({
+    const [detailRows] = await bq.query<{ mushid: string }>({
       query: detailsScript,
-      location: LOCATION,
+      location: googleConfig.location,
       params: { userId, name, description, kind },
     });
-    const mushId = (detailRows?.[0] as any)?.mushid as string | undefined;
+    const mushId = detailRows?.[0]?.mushid;
     if (!mushId) throw new Error("Failed to obtain MushID");
 
     // 5️⃣ Insert & publish each row per second
-    const table = bq.dataset(DATASET_ID).table(SIGNALS_TABLE);
+    const table = bq.dataset(googleConfig.datasetId).table(googleConfig.signalsTable);
     let inserted = 0;
 
     for (const r of rows) {
@@ -132,31 +128,30 @@ export async function POST(req: NextRequest) {
       insertedSignals: inserted,
       totalCsvRows: rows.length,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     try { if (tmpPath) await fs.unlink(tmpPath); } catch {}
-    return NextResponse.json({ error: err?.message ?? "Upload failed" }, { status: 500 });
+    const message = err instanceof Error ? err.message : "Upload failed";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
-    const bq = new BigQuery({
-      projectId: PROJECT_ID,
-      keyFilename: KEY_FILE,
-      location: LOCATION,
-    });
-
     const query = `
       SELECT MushID, Name, Description, Mushroom_Kind, UserID
-      FROM \`${PROJECT_ID}.${DATASET_ID}.${DETAILS_TABLE}\`
+      FROM \`${googleConfig.projectId}.${googleConfig.datasetId}.${googleConfig.detailsTable}\`
       ORDER BY CreatedAt DESC
     `;
-    const [rows] = await bq.query({ query, location: LOCATION });
+    const [rows] = await getBigQueryClient().query<Record<string, unknown>>({
+      query,
+      location: googleConfig.location,
+    });
     return NextResponse.json(rows);
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("GET mushrooms failed:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch mushrooms";
     return NextResponse.json(
-      { error: err?.message ?? "Failed to fetch mushrooms" },
+      { error: message },
       { status: 500 }
     );
   }

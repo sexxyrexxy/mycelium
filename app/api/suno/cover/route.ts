@@ -43,12 +43,24 @@ export async function POST(req: Request) {
     });
 
     const raw = await res.text();
-    let json: any = null; try { json = raw ? JSON.parse(raw) : null; } catch {}
-    if (!res.ok || !json || json?.code !== 200) {
+    let parsed: unknown = null;
+    try {
+      parsed = raw ? JSON.parse(raw) : null;
+    } catch {
+      parsed = null;
+    }
+    const json = parsed as {
+      code?: number;
+      data?: { taskId?: string };
+      msg?: string;
+    } | null;
+
+    if (!res.ok || !json || json.code !== 200 || !json.data?.taskId) {
       return NextResponse.json({ error: json?.msg ?? `upload-cover failed (${res.status})`, raw: raw?.slice(0,500) }, { status: 502 });
     }
     return NextResponse.json({ taskId: json.data.taskId });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "Internal error" }, { status: 500 });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
