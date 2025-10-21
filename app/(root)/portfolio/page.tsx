@@ -62,7 +62,7 @@ export default function PortfolioList() {
           <button
             type="button"
             onClick={() => setShowUploader(true)}
-            className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#564930] shadow-md transition hover:bg-[#423621]"
+            className="inline-flex items-center justify-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#564930] shadow-md transition hover:bg-[#ceb891]"
           >
             Upload CSV
           </button>
@@ -149,7 +149,7 @@ export default function PortfolioList() {
                       <td className="px-4 py-3 text-right">
                         <Link
                           href={`/portfolio/mushroom/${mush.MushID}`}
-                          className="inline-flex items-center rounded bg-[#AAA432] px-3 py-1 text-xs font-semibold text-white transition hover:bg-green-600"
+                          className="inline-flex items-center rounded bg-[#AAA432] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#615e1f]"
                         >
                           View
                         </Link>

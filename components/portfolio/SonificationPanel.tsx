@@ -695,7 +695,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
       <CardHeader>
         <CardTitle>Mushroom Sonification</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 space-x-2">
         <p className="text-sm text-muted-foreground">
           Let your mushroom sing.
           <span className="text-xs font-medium">Source: {displaySource}</span>
@@ -710,7 +710,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         <button
           onClick={onHear}
           disabled={disableButton}
-          className="px-4 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="px-4 py-2 rounded-md bg-[#C89E4D]/70 text-white hover:bg-[#C89E4D]"
         >
           {busy ? "Generating track..." : "WIP"}
         </button>
@@ -726,7 +726,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         <button
           onClick={onRenderSynth}
           disabled={disableSynthRenderButton}
-          className="px-4 py-2 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="px-4 py-2 rounded-md bg-[#AAA432]/70 text-white hover:bg-[#AAA432]"
         >
           {synthBusy ? "Rendering synth..." : "Synth"}
         </button>
@@ -734,7 +734,7 @@ export function SonificationPanel({ mushId, csvUrl = DEFAULT_CSV_URL }: Props) {
         <button
           onClick={onUploadSynth}
           disabled={disableSynthUploadButton}
-          className="px-4 py-2 rounded-md bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+          className="px-4 py-2 rounded-md bg-[#AA3232]/70 text-white hover:bg-[#AA3232]"
         >
           {synthUploadBusy ? "Adding groove..." : "Synth Jam"}
         </button>

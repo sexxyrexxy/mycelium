@@ -116,8 +116,8 @@ export default function Overview() {
       <div className="grid grid-cols-1 lg:grid-cols-[65%_35%] gap-6">
         {/* Left side (65%) */}
         <div>
-          <RTLineChart mushId={id} /> {/* displays HISTORICAL and REALTIME data - Kai */}
-
+          <RTLineChart mushId={id} />{" "}
+          {/* displays HISTORICAL and REALTIME data - Kai */}
           {/* NEW: Care panel directly below the chart */}
           <Card className="mt-4">
             <CardHeader>
@@ -128,7 +128,7 @@ export default function Overview() {
               <div>
                 <div className="flex items-center justify-between">
                   <span className="font-medium flex items-center gap-2">
-                    🍄 Nutrients
+                    🍃 Nutrients
                   </span>
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${nutrientChip.cls}`}
@@ -138,7 +138,7 @@ export default function Overview() {
                 </div>
                 <SegBar
                   level={nutrientLevel}
-                  filledClass="bg-emerald-500"
+                  filledClass="bg-[#AAA432]"
                   label="Nutrients"
                 />
                 <p className="text-xs text-gray-600 mt-2">
@@ -161,7 +161,7 @@ export default function Overview() {
                 </div>
                 <SegBar
                   level={humidityLevel}
-                  filledClass="bg-sky-500"
+                  filledClass="bg-[#3274aa]"
                   label="Humidity"
                 />
                 <p className="text-xs text-gray-600 mt-2">
@@ -202,11 +202,11 @@ export default function Overview() {
         </div>
 
         {/* Right side (35%) */}
-        <div className="flex flex-col gap-1">
-          <Card className="overflow-hidden border-none bg-gradient-to-br from-emerald-50 via-white to-white shadow-lg">
+        <div className="flex flex-col gap-4">
+          <Card className="overflow-hidden border-none bg-gradient-to-br from-[#C89E4D]/30 via-white to-white shadow-lg">
             <CardHeader>
               <CardTitle>Pulse Snapshot</CardTitle>
-              <p className="text-xs uppercase tracking-[0.2em] text-emerald-700/70">
+              <p className="text-xs uppercase tracking-[0.2em] text-[#6a6720]/80">
                 Colony #{id}
               </p>
             </CardHeader>
@@ -216,7 +216,7 @@ export default function Overview() {
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
                     Average
                   </p>
-                  <p className="mt-1 text-2xl font-semibold text-emerald-700">
+                  <p className="mt-1 text-2xl font-semibold text-[#6a6720]">
                     {avgMv != null ? `${avgMv.toFixed(1)} mV` : "—"}
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -227,7 +227,7 @@ export default function Overview() {
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
                     Mood
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-emerald-700">
+                  <p className="mt-1 text-lg font-semibold text-[#6a6720]">
                     Steady + balanced
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -243,7 +243,7 @@ export default function Overview() {
             </CardContent>
           </Card>
 
-          <Card className="overflow-hidden border-none bg-gradient-to-br from-sky-50 via-white to-white shadow-lg">
+          <Card className="overflow-hidden border-none bg-gradient-to-br from-[#AAA432]/35 via-white to-white shadow-lg">
             <CardHeader>
               <CardTitle>Activity Analysis</CardTitle>
             </CardHeader>
@@ -253,8 +253,8 @@ export default function Overview() {
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
                     Status
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-sky-700">
-                    High Activity 🌟
+                  <p className="mt-1 text-lg font-semibold text-[#6a6720]">
+                    High Activity
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Frequent bursts across the latest window.
@@ -264,7 +264,7 @@ export default function Overview() {
                   <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
                     Momentum
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-sky-700">
+                  <p className="mt-1 text-lg font-semibold text-[#6a6720]">
                     +18%
                   </p>
                   <p className="text-xs text-muted-foreground">
@@ -287,13 +287,13 @@ export default function Overview() {
       </div>
 
       {/* Understanding panel with sprites moved INSIDE the dropdown */}
-      <div className="lg:col-span-2 w-full mt-6">
+      <div className="lg:col-span-2 w-full mt-5">
         <div
           onClick={() => setOpen(!open)}
-          className="cursor-pointer bg-[#564930] text-white rounded-md p-3 flex items-center gap-3 max-w-[1000px] mx-auto"
+          className="cursor-pointer bg-[#766647] text-white rounded-md p-3 flex items-center gap-3 max-w-[1000px] mx-auto"
         >
           <span className="text-lg font-semibold">
-            🧠 Understanding Mushroom Signals
+            Understanding Mushroom Signals
           </span>
           <span
             className={`transform transition-transform duration-300 ${
@@ -311,7 +311,7 @@ export default function Overview() {
           }}
           className="overflow-hidden transition-all duration-500 ease-in-out mt-2 max-w-[1000px] mx-auto"
         >
-          <ul className="bg-[#564930] rounded-md p-2 space-y-2">
+          <ul className="bg-[#766647] rounded-md p-2 space-y-2">
             <li className="flex flex-col gap-1 p-2 rounded-md">
               <span className="text-lg text-white font-semibold">
                 What are they? 🤔
@@ -325,7 +325,7 @@ export default function Overview() {
             </li>
             <li className="flex flex-col gap-1 p-2 rounded-md">
               <span className="text-lg text-white font-semibold">
-                Why it matters 🌍
+                Why it matters
               </span>
               <ul className="list-disc list-inside text-base text-white space-y-1">
                 <li>
