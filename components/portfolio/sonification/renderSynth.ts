@@ -79,67 +79,75 @@ function buildSynthEvents(
   return events;
 }
 
+let lameModulePromise: Promise<any> | null = null;
+
+async function loadLame() {
+  if (!lameModulePromise) {
+    lameModulePromise = import("lamejs");
+  }
+  return lameModulePromise;
+}
+
 async function audioBufferToMp3(buffer: AudioBuffer): Promise<Uint8Array> {
-  const lamejs = await import("lamejs");
-  const Mp3Encoder = lamejs.Mp3Encoder;
+  const { Mp3Encoder } = await loadLame();
+  if (!Mp3Encoder) {
+    throw new Error("lamejs Mp3Encoder is unavailable");
+  }
 
-  const channelCount = buffer.numberOfChannels;
+  const channelCount = Math.max(1, Math.min(buffer.numberOfChannels, 2));
   const sampleRate = buffer.sampleRate;
+  const frameSize = 1152;
 
-  const channelData = Array.from({ length: channelCount }, (_, channel) =>
-    buffer.getChannelData(channel),
+  const channelData: Float32Array[] = Array.from(
+    { length: channelCount },
+    (_, idx) => buffer.getChannelData(idx),
   );
 
   const samplesPerChannel = channelData[0]?.length ?? 0;
-  if (!samplesPerChannel) return new Uint8Array();
+  if (!samplesPerChannel) {
+    return new Uint8Array();
+  }
 
-  const encoder = new Mp3Encoder(channelCount > 1 ? 2 : 1, sampleRate, 192);
-  const blockSize = 1152;
+  const encoder = new Mp3Encoder(channelCount, sampleRate, 192);
   const chunks: Uint8Array[] = [];
 
-  let position = 0;
-  while (position < samplesPerChannel) {
-    const chunkLength = Math.min(blockSize, samplesPerChannel - position);
-    const buffers: Int16Array[] = [];
+  const floatToInt16 = (value: number) => {
+    const clamped = Math.max(-1, Math.min(1, value));
+    return clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+  };
 
-    for (let channel = 0; channel < (channelCount > 1 ? 2 : 1); channel += 1) {
-      const source =
-        channelData[channel] ?? channelData[0] ?? new Float32Array(chunkLength);
-      const slice = source.subarray(position, position + chunkLength);
-      const int16 = new Int16Array(slice.length);
-
-      for (let i = 0; i < slice.length; i += 1) {
-        const sample = clamp(slice[i], -1, 1);
-        int16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+  for (let position = 0; position < samplesPerChannel; position += frameSize) {
+    const blockLength = Math.min(frameSize, samplesPerChannel - position);
+    const frames = channelData.map((data) => {
+      const block = new Int16Array(blockLength);
+      for (let i = 0; i < blockLength; i += 1) {
+        block[i] = floatToInt16(data[position + i] ?? 0);
       }
-      buffers.push(int16);
+      return block;
+    });
+
+    const encoded =
+      channelCount === 1
+        ? encoder.encodeBuffer(frames[0])
+        : encoder.encodeBuffer(frames[0], frames[1]);
+
+    if (encoded.length) {
+      chunks.push(new Uint8Array(encoded));
     }
-
-    const mp3buf =
-      buffers.length === 2
-        ? encoder.encodeBuffer(buffers[0], buffers[1])
-        : encoder.encodeBuffer(buffers[0]);
-
-    if (mp3buf.length) {
-      chunks.push(new Uint8Array(mp3buf));
-    }
-
-    position += chunkLength;
   }
 
-  const flush = encoder.flush();
-  if (flush.length) {
-    chunks.push(new Uint8Array(flush));
+  const flushed = encoder.flush();
+  if (flushed.length) {
+    chunks.push(new Uint8Array(flushed));
   }
 
-  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
   const result = new Uint8Array(totalLength);
   let offset = 0;
   for (const chunk of chunks) {
     result.set(chunk, offset);
     offset += chunk.length;
   }
-
   return result;
 }
 
