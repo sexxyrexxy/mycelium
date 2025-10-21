@@ -7,9 +7,11 @@ import {
   googleCredentials,
 } from "./googleCloud";
 
+
 const PROJECT_ID =
   process.env.GCP_PROJECT_ID ||
   process.env.BQ_PROJECT_ID ||
+
   googleConfig.projectId ||
   "mycelium-470904";
 const DATASET_ID =
@@ -20,6 +22,7 @@ const DETAILS_TABLE =
   "Mushroom_Details";
 const LOCATION =
   process.env.BQ_LOCATION || googleConfig.location || "australia-southeast1";
+
 const BUCKET_NAME =
   process.env.GCS_SONIFICATION_BUCKET ||
   process.env.GCS_SOUNDS_BUCKET ||
@@ -55,7 +58,7 @@ const storage = new Storage(
         projectId: PROJECT_ID,
         credentials,
       }
-    : { projectId: PROJECT_ID }
+    : { projectId: PROJECT_ID },
 );
 
 const bucket = storage.bucket(BUCKET_NAME);

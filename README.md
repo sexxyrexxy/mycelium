@@ -69,7 +69,7 @@ All secrets now live in `.env.local` (see the committed template). The key varia
 - **Suno** – `SUNO_API_KEY` and `SUNO_BASE`.
 - **Google Cloud** – project/dataset tables (`GCP_PROJECT_ID`, `BIGQUERY_*`), Pub/Sub (`GCP_PUBSUB_*`), and service-account credentials.
 
-Provide the service-account via environment variables only. Use either `GOOGLE_APPLICATION_CREDENTIALS_JSON` (raw JSON with `\n`-escaped private key) or the individual `GOOGLE_APPLICATION_CREDENTIALS_*` fields demonstrated in `.env.local`. The runtime no longer reads `GOOGLE_APPLICATION_CREDENTIALS_FILE`, so make sure deployments expose one of the env-based options.
+
 
 Upload routes expect the datasets/tables referenced by the env vars to exist; adjust them if your schema differs from the defaults noted above.
 
