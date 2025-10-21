@@ -12,7 +12,7 @@ const PROJECT_ID =
 const DATASET_ID = process.env.BQ_DATASET_ID || "MushroomData";
 const DETAILS_TABLE = process.env.BQ_DETAILS_TABLE || "Mushroom_Details";
 const LOCATION = process.env.BQ_LOCATION || "australia-southeast1";
-const KEY_FILE = process.env.GCP_KEY_FILE || "mycelium-470904-5621723dfeff.json";
+const KEY_FILE = process.env.GCP_KEY_FILE;
 const BUCKET_NAME =
   process.env.GCS_SONIFICATION_BUCKET ||
   process.env.GCS_SOUNDS_BUCKET ||
