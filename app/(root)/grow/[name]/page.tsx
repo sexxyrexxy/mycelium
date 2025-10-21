@@ -1,11 +1,5 @@
 import Image from "next/image";
 
-interface GrowPageProps {
-  params: {
-    name: string;
-  };
-}
-
 interface MushroomData {
   common: string;
   species: string;
@@ -805,14 +799,24 @@ const growData: Record<string, MushroomData> = {
   },
 };
 
-export default function GrowPage({ params }: GrowPageProps) {
-  const mushroom = growData[params.name];
+type GrowPageParams = {
+  name: string;
+};
+
+export default async function GrowPage({
+  params,
+}: {
+  params: Promise<GrowPageParams>;
+}) {
+  const { name } = await params;
+  const slug = name.toLowerCase();
+  const mushroom = growData[slug];
 
   if (!mushroom) {
     return <p className="p-8">Mushroom not found.</p>;
   }
 
-  const imgSrc = mushroom.img ?? `/pixelarts/${params.name}.png`;
+  const imgSrc = mushroom.img ?? `/pixelarts/${slug}.png`;
 
   return (
     <div className="p-8 grid grid-cols-1 md:grid-cols-4 gap-8">

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "TS_SKIP_BUILD=true next build --no-lint",
+    "build": "SKIP_ENV_VALIDATION=1 next build --no-lint",
     "start": "next start",
     "lint": "next lint"
   },
