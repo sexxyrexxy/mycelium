@@ -4,28 +4,55 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { drawBioluminescentMushrooms } from "@/components/portfolio/visualisation/Cave";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import chroma from "chroma-js";
 
 type Signal = {
   timestamp: string;
   signal: number | null;
 };
 
-// Palette of colors with descriptions
-const colors = [
-  { color: "#0a3d62", text: "Dark Blue — minimal drift, resting state." },
-  { color: "#1b5f73", text: "Blue-Green — calm and balanced activity." },
-  { color: "#4cb7b5", text: "Teal — adaptive baseline drift, responsive state." },
-  { color: "#c4dce5", text: "Pale Teal — elevated baseline; high activity or mild stress." },
-];
+const rgbStringToHex = (rgb: string) => {
+  const result = rgb.match(/\d+/g);
+  if (!result || result.length < 3) return "#000000";
+  const [r, g, b] = result.map(Number);
+  return (
+    "#" +
+    [r, g, b]
+      .map((x) => {
+        const hex = x.toString(16);
+        return hex.length === 1 ? "0" + hex : hex;
+      })
+      .join("")
+  );
+};
 
-// Function to get the closest color description
-const getDescriptionForColor = (glowColor: string) => {
+// Helper to map glowColor hex to closest description
+const getDescriptionForColor = (hexColor: string) => {
+  const colors = [
+    { color: "#0a3d62", text: "Dark Blue — minimal drift, resting state." },
+    { color: "#1b5f73", text: "Blue-Green — calm and balanced activity." },
+    { color: "#4cb7b5", text: "Teal — adaptive baseline drift, responsive state." },
+    { color: "#c4dce5", text: "Pale Teal — elevated baseline; high activity or mild stress." },
+  ];
+
+  function hexToRgb(hex: string) {
+    const bigint = parseInt(hex.replace("#", ""), 16);
+    return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+  }
+
+  function colorDistance(c1: number[], c2: number[]) {
+    return Math.sqrt(
+      Math.pow(c1[0] - c2[0], 2) +
+      Math.pow(c1[1] - c2[1], 2) +
+      Math.pow(c1[2] - c2[2], 2)
+    );
+  }
+
+  const currentRgb = hexToRgb(hexColor);
   let closest = colors[0];
-  let minDist = chroma.distance(chroma(glowColor), chroma(closest.color), "lab");
+  let minDist = colorDistance(currentRgb, hexToRgb(closest.color));
 
   for (const c of colors) {
-    const dist = chroma.distance(chroma(glowColor), chroma(c.color), "lab");
+    const dist = colorDistance(currentRgb, hexToRgb(c.color));
     if (dist < minDist) {
       minDist = dist;
       closest = c;
@@ -40,7 +67,7 @@ const MushroomCaveVisualization: React.FC = () => {
   const params = useParams();
   const mushId = params?.id as string;
 
-  const [glowColor, setGlowColor] = useState<string>("rgb(10, 61, 98)"); // initial glow color
+  const [glowColor, setGlowColor] = useState<string>("rgb(10, 61, 98)"); // initial rgb matching #0a3d62
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -84,9 +111,8 @@ const MushroomCaveVisualization: React.FC = () => {
         600,
         normalizedBaseline,
         mappedSpeeds,
-        spikes,
         (currentColor) => {
-          setGlowColor(currentColor); // currentColor can be any valid CSS color string
+          setGlowColor(currentColor);
         }
       );
       setLoading(false);
@@ -98,8 +124,8 @@ const MushroomCaveVisualization: React.FC = () => {
     };
   }, [mushId]);
 
-  // Get description using chroma-js directly (no hex conversion needed)
-  const currentDesc = getDescriptionForColor(glowColor);
+  // Convert the current rgb glowColor to hex to get description text
+  const currentDesc = getDescriptionForColor(rgbStringToHex(glowColor));
 
   return (
     <div className="flex flex-col items-center justify-center bg-white px-4 py-10 sm:px-6">
@@ -109,15 +135,17 @@ const MushroomCaveVisualization: React.FC = () => {
       </h5>
       <p className="mb-6 max-w-3xl text-center text-gray-700">
         This visualization transforms raw electrical signals from mushrooms into a glowing subterranean landscape.
-        Bioluminescent fungi pulse gently with rhythmic activity, while occasional spikes shimmer across the cavern — highlighting moments
+        Bioluminescent fungi pulse gently with rhythmic activity, while occasional spikes are shown through white mushroom glows — highlighting moments
         of intensity, reaction, or change.
       </p>
       <div className="mx-auto mb-6 h-px w-2/4 bg-[#564930]" />
 
+      {/* Error message above container */}
       {error && (
         <div className="mb-4 text-red-600 font-semibold">{error}</div>
       )}
 
+      {/* SVG container with relative positioning for overlays */}
       <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl border border-gray-300/50 bg-[#0b0b0b] shadow-md">
         <div className="relative aspect-[4/3] w-full">
           {loading && (
@@ -143,11 +171,11 @@ const MushroomCaveVisualization: React.FC = () => {
           <CardContent className="text-sm text-gray-700 space-y-4 flex flex-col items-center">
             <div
               style={{
-                backgroundColor: glowColor,
+                backgroundColor: glowColor, // use exact rgb string here
                 width: "80%",
                 height: 24,
                 borderRadius: 6,
-                boxShadow: `0 0 10px ${glowColor}`,
+                boxShadow: `0 0 10px ${glowColor}`, // exact rgb here too
                 marginBottom: 12,
               }}
             />
@@ -157,30 +185,9 @@ const MushroomCaveVisualization: React.FC = () => {
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Mushroom Glow = Signal Dynamics</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-gray-700 space-y-4 flex flex-col items-center">
-            <p>
-              The speed of the glow animating on the mushroom caps represents how quickly signals are changing. Fast glow pulses highlight sudden bursts of activity (like reacting to touch, light, or moisture). Slow glow pulses indicate steadier, stable conditions.
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>White glow pulses = Spike Detection</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-gray-700 space-y-4 flex flex-col items-center">
-            <p>
-              When mushrooms glow white, this signifies that a strong spike has been detected in the underlying dataset. This indicates unusual activity, which may be a stress or stimulation indicator.
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
 };
 
 export default MushroomCaveVisualization;
-
