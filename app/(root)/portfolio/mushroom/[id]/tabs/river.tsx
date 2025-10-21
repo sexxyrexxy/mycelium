@@ -350,7 +350,7 @@ useEffect(() => {
             </p>
           )}
           {/* Mushroom Phase*/}
-          <div className="">
+          <div className="mt-4 flex justify-center">
             <MushroomLifeCycle stage={activeStage} progress={activeStageProgress} />
           </div>
         </aside>
@@ -399,7 +399,7 @@ useEffect(() => {
                       {story.summary}
                     </p>
                   </div>
-                  <div className="shrink-0 self-center lg:self-start">
+                  <div className="mt-4 flex shrink-0 justify-center lg:justify-end">
                     <MushroomLifeCycle size={140} stage={story.stage} progress={story.progress} />
                   </div>
                 </div>
