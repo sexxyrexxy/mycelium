@@ -1,7 +1,5 @@
 import { BigQuery, BigQueryOptions } from "@google-cloud/bigquery";
 import { PubSub, ClientConfig } from "@google-cloud/pubsub";
-import fs from "fs";
-import path from "path";
 
 type ServiceAccount = {
   type?: string;
@@ -32,8 +30,6 @@ const INDIVIDUAL_CREDENTIAL_ENV_KEYS = {
 } as const;
 
 type IndividualCredentialKey = keyof typeof INDIVIDUAL_CREDENTIAL_ENV_KEYS;
-
-const DEFAULT_KEY_FILE = "mycelium-470904-5621723dfeff.json";
 
 const rawJsonEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
 const rawBase64Env = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_BASE64;
@@ -111,17 +107,7 @@ function resolveCredentials(): ServiceAccount | undefined {
   const fromEnvParts = resolveCredentialsFromIndividualEnv();
   if (fromEnvParts) return fromEnvParts;
 
-  const explicitPath =
-    process.env.GOOGLE_APPLICATION_CREDENTIALS ??
-    process.env.GOOGLE_APPLICATION_CREDENTIALS_FILE;
-  if (explicitPath) {
-    const resolvedPath = path.resolve(process.cwd(), explicitPath);
-    const parsed = tryReadJson(resolvedPath);
-    if (parsed) return parsed;
-  }
-
-  const fallbackPath = path.resolve(process.cwd(), DEFAULT_KEY_FILE);
-  return tryReadJson(fallbackPath);
+  return undefined;
 }
 
 function resolveCredentialsFromIndividualEnv(): ServiceAccount | undefined {
@@ -155,16 +141,6 @@ function resolveCredentialsFromIndividualEnv(): ServiceAccount | undefined {
 function tryParseJson(value: string): ServiceAccount | undefined {
   try {
     return JSON.parse(value) as ServiceAccount;
-  } catch {
-    return undefined;
-  }
-}
-
-function tryReadJson(filePath: string): ServiceAccount | undefined {
-  try {
-    if (!fs.existsSync(filePath)) return undefined;
-    const contents = fs.readFileSync(filePath, "utf8");
-    return JSON.parse(contents) as ServiceAccount;
   } catch {
     return undefined;
   }
