@@ -254,6 +254,7 @@ useEffect(() => {
   // prefer the active stream window; otherwise surface the latest completed stage from history
   const activeStage: MushroomStage =
     currentStory?.stage ?? history[0]?.stage ?? DEFAULT_STAGE;
+  const activeStageProgress = currentStory?.progress;
 
   return (
     <div className="space-y-6">
@@ -350,7 +351,7 @@ useEffect(() => {
           )}
           {/* Mushroom Phase*/}
           <div className="">
-            <MushroomLifeCycle stage={activeStage} />
+            <MushroomLifeCycle stage={activeStage} progress={activeStageProgress} />
           </div>
         </aside>
       </div>
@@ -383,18 +384,25 @@ useEffect(() => {
                 ) : null}
               </div>
               <div className="flex-1 rounded-2xl border bg-background/80 p-4 shadow-sm">
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
-                  {formatRangeLabel(story.start, story.end)}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-foreground">
-                  {story.title}
-                </p>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-                  {story.mood}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {story.summary}
-                </p>
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                  <div className="flex-1">
+                    <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground/70">
+                      {formatRangeLabel(story.start, story.end)}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-foreground">
+                      {story.title}
+                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+                      {story.mood}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {story.summary}
+                    </p>
+                  </div>
+                  <div className="shrink-0 self-center lg:self-start">
+                    <MushroomLifeCycle size={140} stage={story.stage} progress={story.progress} />
+                  </div>
+                </div>
               </div>
             </div>
           ))}

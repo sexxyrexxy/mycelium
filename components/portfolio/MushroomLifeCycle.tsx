@@ -15,12 +15,14 @@ type MushroomLifeCycleProps = {
   size?: number;
   secondsPerStage?: number;
   stage?: MushroomStage;
+  progress?: number;
 };
 
 export default function MushroomLifeCycle({
   size = 240,
   secondsPerStage = 2.2,
   stage: stageOverride,
+  progress,
 }: MushroomLifeCycleProps) {
   const [idx, setIdx] = useState(0);
   const currentStage = stageOverride ?? STAGES[idx];
@@ -52,8 +54,12 @@ export default function MushroomLifeCycle({
   const ease = (x:number)=> x<0?0:x>1?1:x*x*(3-2*x);
 
   // normalized progress 0..1 within current stage (for subtle transitions)
-  const p = (t % Math.round(secondsPerStage*60)) / Math.round(secondsPerStage*60);
-  const k = ease(p);
+  const framesPerStage = Math.max(1, Math.round(secondsPerStage * 60));
+  const stageProgress =
+    stageOverride != null && progress != null
+      ? clamp01(progress)
+      : (t % framesPerStage) / framesPerStage;
+  const k = ease(stageProgress);
 
   // palette & effects per stage
   const style = useMemo(() => {
@@ -188,18 +194,14 @@ export default function MushroomLifeCycle({
           </g>
         )}
 
-        {/* stage label */}
-        <g>
-          <rect x={28} y={6} width={44} height={10} rx={4} fill="rgba(255,255,255,0.22)"/>
-          <text x={50} y={13} textAnchor="middle" fontFamily="system-ui, sans-serif" fontSize="5" fontWeight={700} fill="#fff">
-            {currentStage}
-          </text>
-        </g>
-      </svg>
-
-      <small style={{ color:"#aaa" }}>
-        Rain → Sprout → Bloom → Spore → Wilt → Rebirth (loops)
-      </small>
+      {/* stage label */}
+      <g>
+        <rect x={28} y={6} width={44} height={10} rx={4} fill="rgba(255,255,255,0.22)"/>
+        <text x={50} y={13} textAnchor="middle" fontFamily="system-ui, sans-serif" fontSize="5" fontWeight={700} fill="#fff">
+          {currentStage}
+        </text>
+      </g>
+    </svg>
     </div>
   );
 }
