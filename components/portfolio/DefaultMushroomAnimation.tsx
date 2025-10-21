@@ -20,7 +20,7 @@ export default function DefaultMushroomAnimation({
 
   useEffect(() => {
     let raf = 0;
-    let start = performance.now();
+    const start = performance.now();
     const loop = (now: number) => {
       const elapsed = now - start;
       const phase = (elapsed % pulseSpeedMs) / pulseSpeedMs;

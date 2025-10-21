@@ -369,7 +369,7 @@ export default function RealTimeChart({
           .sort((a, b) => Number(a.time) - Number(b.time))
           .slice(-maxPoints);
         if (!cancelled) setPoints(seed);
-      } catch (error) {
+      } catch {
         if (!cancelled) setPoints([]); // still allow live stream
       }
     };
