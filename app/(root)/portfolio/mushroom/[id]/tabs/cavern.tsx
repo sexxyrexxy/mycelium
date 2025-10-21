@@ -109,7 +109,7 @@ const MushroomCaveVisualization: React.FC = () => {
       </h5>
       <p className="mb-6 max-w-3xl text-center text-gray-700">
         This visualization transforms raw electrical signals from mushrooms into a glowing subterranean landscape.
-        Bioluminescent fungi pulse gently with rhythmic activity, while occasional spikes shimmer across the cavern — highlighting moments
+        Bioluminescent fungi pulse gently with rhythmic activity, while occasional spikes displayed as white mushroom glows — highlighting moments
         of intensity, reaction, or change.
       </p>
       <div className="mx-auto mb-6 h-px w-2/4 bg-[#564930]" />
