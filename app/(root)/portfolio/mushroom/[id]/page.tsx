@@ -23,7 +23,7 @@ export default function Page() {
         onValueChange={setActiveTab}
         className="w-full"
       >
-        <TabsList className="mb-6 flex w-full gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1.5 shadow-inner supports-[backdrop-filter]:bg-muted/40 md:grid md:grid-cols-5 md:gap-2 md:overflow-visible">
+        <TabsList className="mb-6 flex w-full gap-1 overflow-x-auto rounded-xl bg-muted/60 p-1.5 shadow-inner supports-[backdrop-filter]:bg-muted/40 md:grid md:grid-cols-4 md:gap-2 md:overflow-visible">
           <TabsTrigger value="overview" className={triggerBaseClass}>
             <LayoutDashboard className="h-4 w-4" />
             <span className="hidden font-medium md:inline">Overview</span>
@@ -44,10 +44,10 @@ export default function Page() {
             <span className="hidden font-medium md:inline">Pulse Cavern</span>
           </TabsTrigger>
 
-          <TabsTrigger value="analysis" className={triggerBaseClass}>
+          {/* <TabsTrigger value="analysis" className={triggerBaseClass}>
             <Search className="h-4 w-4" />
             <span className="hidden font-medium md:inline">Analysis</span>
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="overview">
