@@ -134,3 +134,42 @@ const rangeMap: Record<string, { label: string; hours: number }> = {
     );
   }
 }
+
+// ---- DELETE /api/mushroom/[id] ----
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const mushId = id;
+
+  try {
+    const datasetPath = `${googleConfig.projectId}.${googleConfig.datasetId}`;
+
+    // Delete related signals first, then details row
+    const deleteSignals = `
+      DELETE FROM ` + "`" + `${datasetPath}.${googleConfig.signalsTable}` + "`" + `
+      WHERE MushID = @mushId;
+    `;
+
+    const deleteDetails = `
+      DELETE FROM ` + "`" + `${datasetPath}.${googleConfig.detailsTable}` + "`" + `
+      WHERE MushID = @mushId;
+    `;
+
+    await bq.query({
+      query: deleteSignals,
+      params: { mushId },
+      location: googleConfig.location,
+    });
+
+    await bq.query({
+      query: deleteDetails,
+      params: { mushId },
+      location: googleConfig.location,
+    });
+
+    return NextResponse.json({ status: "ok", mushId });
+  } catch (e: unknown) {
+    console.error("DELETE mushroom/[id] error:", e);
+    const message = e instanceof Error ? e.message : "Failed to delete mushroom";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

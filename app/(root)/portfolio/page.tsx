@@ -20,6 +20,7 @@ export default function PortfolioList() {
   const [loading, setLoading] = useState(true);
   const [showUploader, setShowUploader] = useState(false);
   const [uploadBanner, setUploadBanner] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadMushrooms = useCallback(async () => {
     setLoading(true);
@@ -38,6 +39,28 @@ export default function PortfolioList() {
   useEffect(() => {
     loadMushrooms();
   }, [loadMushrooms]);
+
+  const handleDelete = useCallback(
+    async (mushId: string) => {
+      const ok =
+        typeof window !== "undefined"
+          ? window.confirm("Delete this mushroom? This cannot be undone.")
+          : true;
+      if (!ok) return;
+      setDeletingId(mushId);
+      try {
+        const res = await fetch(`/api/mushroom/${mushId}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete");
+        setMushrooms((prev) => prev.filter((m) => m.MushID !== mushId));
+      } catch (err) {
+        console.error("Delete failed:", err);
+        alert("Failed to delete. Please try again.");
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    []
+  );
 
   return (
     <>
@@ -147,12 +170,22 @@ export default function PortfolioList() {
                         {mush.Description || "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/portfolio/mushroom/${mush.MushID}`}
-                          className="inline-flex items-center rounded bg-[#AAA432] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#615e1f]"
-                        >
-                          View
-                        </Link>
+                        <div className="inline-flex items-center gap-2">
+                          <Link
+                            href={`/portfolio/mushroom/${mush.MushID}`}
+                            className="inline-flex items-center rounded bg-[#AAA432] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#615e1f]"
+                          >
+                            View
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(mush.MushID)}
+                            disabled={deletingId === mush.MushID}
+                            className="inline-flex items-center rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {deletingId === mush.MushID ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -181,12 +214,22 @@ export default function PortfolioList() {
                         {mush.Mushroom_Kind}
                       </p>
                     </div>
-                    <Link
-                      href={`/portfolio/mushroom/${mush.MushID}`}
-                      className="rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white transition hover:bg-green-600"
-                    >
-                      View
-                    </Link>
+                    <div className="flex items-center">
+                      <Link
+                        href={`/portfolio/mushroom/${mush.MushID}`}
+                        className="rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white transition hover:bg-green-600"
+                      >
+                        View
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(mush.MushID)}
+                        disabled={deletingId === mush.MushID}
+                        className="ml-2 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+                      >
+                        {deletingId === mush.MushID ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-3 text-sm text-muted-foreground">
                     {mush.Description || "No description yet."}
@@ -226,7 +269,7 @@ export default function PortfolioList() {
                 onClose={() => setShowUploader(false)}
                 onUploaded={() => {
                   setUploadBanner(
-                    "Upload successful—your mushroom is syncing now."
+                    "Upload successful — your mushroom is syncing now."
                   );
                   setShowUploader(false);
                   loadMushrooms();
