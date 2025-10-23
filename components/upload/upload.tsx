@@ -42,6 +42,7 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
     setDescription("");
     setKind("");
   };
+  const closedImmediatelyRef = useRef(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,6 +66,16 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
     setBusy(true);
     setStatus(`Uploading ${file.name}… (${realtime ? "realtime" : "batch"})`);
     setError(null);
+    // If realtime, close immediately. Then refresh portfolio after 1s.
+    if (realtime) {
+      closedImmediatelyRef.current = true;
+      try {
+        onClose?.();
+      } catch {}
+      setTimeout(() => {
+        try { onUploaded?.({ mode: "realtime" }); } catch {}
+      }, 4500);
+    }
     try {
       const res = await fetch(endpoint, { method: "POST", body: fd });
       const json = (await res.json()) as Record<string, unknown> | null;
@@ -73,16 +84,20 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
           typeof json?.error === "string" ? json.error : "Upload failed";
         throw new Error(message);
       }
-      setStatus(`Uploaded ${file.name}${realtime ? " (realtime started)" : ""}`);
-      onUploaded?.(json);
-      setTimeout(() => {
-        onClose?.();
-        reset();
-      }, 1200);
+      if (!closedImmediatelyRef.current) {
+        setStatus(`Uploaded ${file.name}${realtime ? " (realtime started)" : ""}`);
+        onUploaded?.(json);
+        setTimeout(() => {
+          onClose?.();
+          reset();
+        }, 1200);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Upload failed";
-      setError(message);
-      setBusy(false);
+      if (!closedImmediatelyRef.current) {
+        setError(message);
+        setBusy(false);
+      }
     }
   };
 
