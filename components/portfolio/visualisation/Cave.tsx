@@ -12,23 +12,28 @@ export function drawBioluminescentMushrooms(
   const svg = d3.select(svgElement);
   svg.selectAll("*").remove();
 
+  // -- glow filter ---
   const defs = svg.append("defs");
 
-  defs.append("filter")
+  const filter = defs.append("filter")
     .attr("id", "base-glow")
     .attr("x", "-50%")
-    .attr("y", "-100%")
+    .attr("y", "-50%")
     .attr("width", "200%")
-    .attr("height", "400%")
-    .html(`
-      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
-      <feMerge>
-        <feMergeNode in="blur" /> 
-        <feMergeNode in="blur" />
-        <feMergeNode in="blur" />
-        <feMergeNode in="SourceGraphic" />
-      </feMerge>
-    `);
+    .attr("height", "200%");
+
+    // Add Gaussian blur
+  filter.append("feGaussianBlur")
+    .attr("in", "SourceGraphic")
+    .attr("stdDeviation", 8) 
+    .attr("result", "coloredBlur");
+    
+    
+  const feMerge = filter.append("feMerge");
+  feMerge.append("feMergeNode").attr("in", "coloredBlur");
+  feMerge.append("feMergeNode").attr("in", "coloredBlur");
+  feMerge.append("feMergeNode").attr("in", "coloredBlur");
+  feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
   const numMushrooms = 80;
   const sizeScale = d3.scaleLinear().domain([0, numMushrooms]).range([5, 15]);
@@ -101,7 +106,7 @@ export function drawBioluminescentMushrooms(
   const seenSpikes = new Set<number>();
   let spikeIndex = 0;
 
-  // --- Glow loop (unchanged speed) ---
+  // --- Glow loop ---
   let t = 0;
   let speedIndex = 0;
 
@@ -129,7 +134,7 @@ export function drawBioluminescentMushrooms(
         seenSpikes.add(spikeIndex);
         console.log("Spike detected at index:", spikeIndex);
 
-        const numMushroomsToGlow = 3;
+        const numMushroomsToGlow = 6;
         for (let j = 0; j < numMushroomsToGlow; j++) {
           const m = mushrooms[Math.floor(Math.random() * mushrooms.length)];
           activeSpikes.push({ m, phase: t });
@@ -137,13 +142,12 @@ export function drawBioluminescentMushrooms(
       }
       spikeIndex++;
     } else {
-      // reset once all spikes processed
       spikeIndex = 0;
       seenSpikes.clear();
       console.log("Spike array complete — resetting");
     }
 
-    // --- Animate spikes using same sin fade ---
+    // --- Animate spikes ---
     for (let i = activeSpikes.length - 1; i >= 0; i--) {
       const spike = activeSpikes[i];
       const pulse = (Math.sin(t - spike.phase) + 1) / 2;

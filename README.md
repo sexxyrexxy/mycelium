@@ -115,6 +115,8 @@ For questions about the dataset or to request credentials, reach out to the proj
 ---
 
 ## References
+Network.tsx: for the voronoi diagram, the following website guided code implementation: https://www.react-graph-gallery.com/voronoi
+Cave.tsx: The blur effect was guided by code from: https://www.visualcinnamon.com/2016/06/glow-filter-d3-visualization/
 
 AI was used for debugging of code
 
