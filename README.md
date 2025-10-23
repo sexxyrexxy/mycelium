@@ -69,8 +69,6 @@ All secrets now live in `.env.local` (see the committed template). The key varia
 - **Suno** – `SUNO_API_KEY` and `SUNO_BASE`.
 - **Google Cloud** – project/dataset tables (`GCP_PROJECT_ID`, `BIGQUERY_*`), Pub/Sub (`GCP_PUBSUB_*`), and service-account credentials.
 
-
-
 Upload routes expect the datasets/tables referenced by the env vars to exist; adjust them if your schema differs from the defaults noted above.
 
 ---
