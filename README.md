@@ -126,7 +126,8 @@ D3
 Tonejs
 lightweight-charts
 lucide-react
-shadcn
+shadcn components
+
 AI was used for debugging of code
 
 © Mycelium Signal Studio – visualising fungal intelligence in real time.
