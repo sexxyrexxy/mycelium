@@ -66,12 +66,15 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
     setBusy(true);
     setStatus(`Uploading ${file.name}… (${realtime ? "realtime" : "batch"})`);
     setError(null);
-    // If realtime, close immediately. We'll refresh after server responds.
+    // If realtime, close immediately. Then refresh portfolio after 1s.
     if (realtime) {
       closedImmediatelyRef.current = true;
       try {
         onClose?.();
       } catch {}
+      setTimeout(() => {
+        try { onUploaded?.({ mode: "realtime" }); } catch {}
+      }, 4500);
     }
     try {
       const res = await fetch(endpoint, { method: "POST", body: fd });
@@ -81,10 +84,7 @@ export const UploadPage = ({ onClose, onUploaded, className }: UploadPageProps) 
           typeof json?.error === "string" ? json.error : "Upload failed";
         throw new Error(message);
       }
-      if (closedImmediatelyRef.current) {
-        // Modal already closed (realtime). Trigger refresh now that server acknowledged.
-        try { onUploaded?.(json); } catch {}
-      } else {
+      if (!closedImmediatelyRef.current) {
         setStatus(`Uploaded ${file.name}${realtime ? " (realtime started)" : ""}`);
         onUploaded?.(json);
         setTimeout(() => {
