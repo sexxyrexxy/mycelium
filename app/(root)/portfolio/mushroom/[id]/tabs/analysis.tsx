@@ -285,7 +285,7 @@ export function Analysis() {
         mappedSpeeds,
         normalizedBaseline,
         spikes,
-        false
+        true
       );
 
       setWorkerLoading(false);

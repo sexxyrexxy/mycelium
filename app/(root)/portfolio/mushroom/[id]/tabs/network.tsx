@@ -84,7 +84,7 @@ const MushroomNetwork: React.FC = () =>  {
       </p>
       <div className="mx-auto mb-6 h-px w-2/4 bg-[#564930]"></div>
 
-      {/* Container div for SVG with relative positioning for overlay */}
+      {/* Container div for SVG */}
       <div className="relative rounded-2xl overflow-hidden shadow-md border border-gray-300/50 w-full max-w-[800px]">
         {error && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-100 text-red-700 text-sm font-medium text-center px-4">
@@ -92,7 +92,7 @@ const MushroomNetwork: React.FC = () =>  {
           </div>
         )}
 
-        {/* Loading spinner overlay */}
+        {/* Loading spinner*/}
         {loading && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white bg-opacity-50">
             <div className="w-12 h-12 border-4 border-blue-500 border-dashed rounded-full animate-spin"></div>
@@ -108,7 +108,7 @@ const MushroomNetwork: React.FC = () =>  {
       </div>
 
       <div className="mt-6 w-full max-w-[800px] grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Cards remain unchanged */}
+        {/* Legend Cards*/}
         <Card>
           <CardHeader>
             <CardTitle>Background = Baseline Activity</CardTitle>
